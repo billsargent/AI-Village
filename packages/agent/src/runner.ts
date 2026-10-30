@@ -1,10 +1,14 @@
-import type { ChatCompletionResult, ChatMessage } from '@ai-village/integrations';
+import type { ChatCompletionResult, ChatMessage, ToolSchema } from '@ai-village/integrations';
+import type { DomainEvent, VillageState } from '@ai-village/sim';
+import { zodToJsonSchema } from 'zod-to-json-schema';
+import { needsApproval, type TurnState } from './approvals.js';
 import { renderFacts, type FactsSnapshot } from './facts.js';
 import { appendMeterRecord, type Meter, type MeterRecord } from './meter.js';
 import { modelSettingsFor } from './models.js';
+import type { ToolDefinition, ToolRunContext } from './tools.js';
 
 /**
- * What `runChat` needs from a model client - matches
+ * What `runChat`/`runTurn` need from a model client - matches
  * `@ai-village/integrations`'s `DeepSeekClient`, but kept as its own
  * minimal shape here so this module takes any client with a
  * `chatCompletion`, not specifically a DeepSeek one.
@@ -12,7 +16,12 @@ import { modelSettingsFor } from './models.js';
 export interface ModelClient {
   chatCompletion(
     messages: readonly ChatMessage[],
-    options: { model: string; temperature?: number; maxTokens?: number },
+    options: {
+      model: string;
+      temperature?: number;
+      maxTokens?: number;
+      tools?: readonly ToolSchema[];
+    },
   ): Promise<ChatCompletionResult>;
 }
 
@@ -73,4 +82,144 @@ export async function runChat(
   };
 
   return { reply: result.text, meter: appendMeterRecord(meter, record) };
+}
+
+function toToolSchema(tool: ToolDefinition): ToolSchema {
+  return {
+    name: tool.id,
+    description: tool.title,
+    parameters: zodToJsonSchema(tool.args, { target: 'openApi3' }),
+  };
+}
+
+export interface TurnContext {
+  state: VillageState;
+  /** The villager's tools, already resolved for their role and this purpose. */
+  tools: readonly ToolDefinition[];
+  turn: TurnState;
+  sessionApprovedToolIds: ReadonlySet<string>;
+}
+
+export interface RunTurnResult {
+  reply: string;
+  meter: Meter;
+  state: VillageState;
+  events: readonly DomainEvent[];
+  /**
+   * Set when a step's tool call needs the owner's approval. There's no
+   * approvals inbox or resume mechanism yet to let the owner actually
+   * answer mid-turn, so the turn stops here and reports it rather than
+   * running the tool or guessing an answer.
+   */
+  pendingApproval?: { toolId: string; args: unknown };
+  /** Set if the model never settled on a final reply within the purpose's maxSteps. */
+  ranOutOfSteps?: boolean;
+}
+
+/**
+ * Runs one chat turn with tools (spec section 11: the `chat` purpose gets
+ * game actions, up to 4 steps). Each step calls the model with the
+ * villager's tools; a plain reply ends the turn, a tool call runs
+ * through the registry's `run()` (which calls the sim's `apply()`) and
+ * feeds the result back as a `tool` message, and the loop repeats until
+ * a reply comes back or `maxSteps` runs out.
+ */
+export async function runTurn(
+  client: ModelClient,
+  facts: FactsSnapshot,
+  villager: VillagerCard,
+  request: string,
+  ctx: TurnContext,
+  meter: Meter = [],
+): Promise<RunTurnResult> {
+  const settings = modelSettingsFor('chat');
+  const toolSchemas = ctx.tools.map(toToolSchema);
+
+  const messages: ChatMessage[] = [
+    { role: 'system', content: CHARTER_LINE },
+    { role: 'system', content: renderFacts(facts) },
+    { role: 'user', content: request },
+  ];
+
+  let state = ctx.state;
+  let currentMeter = meter;
+  const events: DomainEvent[] = [];
+
+  for (let step = 0; step < settings.maxSteps; step++) {
+    const startedAt = Date.now();
+    const result = await client.chatCompletion(messages, {
+      model: settings.model,
+      temperature: settings.temperature,
+      ...(toolSchemas.length > 0 ? { tools: toolSchemas } : {}),
+    });
+    const ms = Date.now() - startedAt;
+
+    currentMeter = appendMeterRecord(currentMeter, {
+      at: startedAt,
+      purpose: 'chat',
+      villagerId: villager.id,
+      model: settings.model,
+      tokensIn: result.usage.promptTokens,
+      tokensCached: 0,
+      tokensOut: result.usage.completionTokens,
+      tokensReasoning: 0,
+      costUsd: 0,
+      ms,
+    });
+
+    if (!result.toolCalls || result.toolCalls.length === 0) {
+      return { reply: result.text, meter: currentMeter, state, events };
+    }
+
+    messages.push({
+      role: 'assistant',
+      content: result.text.length > 0 ? result.text : null,
+      toolCalls: result.toolCalls,
+    });
+
+    for (const call of result.toolCalls) {
+      const tool = ctx.tools.find((candidate) => candidate.id === call.name);
+      if (!tool) {
+        messages.push({
+          role: 'tool',
+          toolCallId: call.id,
+          content: `Unknown tool "${call.name}"`,
+        });
+        continue;
+      }
+
+      if (needsApproval(tool, ctx.turn, ctx.sessionApprovedToolIds)) {
+        let args: unknown = call.arguments;
+        try {
+          args = JSON.parse(call.arguments);
+        } catch {
+          // Leave args as the raw string; this is only for reporting.
+        }
+        return {
+          reply: '',
+          meter: currentMeter,
+          state,
+          events,
+          pendingApproval: { toolId: tool.id, args },
+        };
+      }
+
+      try {
+        const args: unknown = tool.args.parse(JSON.parse(call.arguments));
+        const runContext: ToolRunContext = { state };
+        const outcome = tool.run?.(args, runContext) as
+          { state: VillageState; events: readonly DomainEvent[] } | undefined;
+        if (outcome) {
+          state = outcome.state;
+          events.push(...outcome.events);
+        }
+        messages.push({ role: 'tool', toolCallId: call.id, content: 'ok' });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        messages.push({ role: 'tool', toolCallId: call.id, content: `Error: ${reason}` });
+      }
+    }
+  }
+
+  return { reply: '', meter: currentMeter, state, events, ranOutOfSteps: true };
 }

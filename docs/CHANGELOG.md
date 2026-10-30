@@ -30,3 +30,6 @@
 - The DeepSeek client's tool-calling support: `tools` in the request,
   `tool_calls` in the response, and the assistant/tool-reply message
   shapes a real tool-calling turn needs (#76).
+- `runTurn`: the chat turn loop, calling the model with a villager's tools,
+  running approved calls through the registry and `apply()`, feeding
+  results back, and repeating up to the chat purpose's maxSteps (#78).
