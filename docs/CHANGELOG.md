@@ -17,3 +17,5 @@
 - Database persistence: a Drizzle/libsql schema, migrations, and
   repositories for everything the sim simulates, with a round-trip test
   (run a village, save it, reload it, confirm it matches) (#54).
+- The agent layer's facts(), tool registry, and risk/approval decisions -
+  the parts of the agent that need no model provider or keys (#60).
