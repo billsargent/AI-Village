@@ -14,3 +14,6 @@
 - Two stints a day and the relationships/affinity system, unlocking the
   Quarrel and Proposal happenings (#43).
 - `.gitattributes` forcing LF line endings (#45).
+- Database persistence: a Drizzle/libsql schema, migrations, and
+  repositories for everything the sim simulates, with a round-trip test
+  (run a village, save it, reload it, confirm it matches) (#54).
