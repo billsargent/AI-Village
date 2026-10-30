@@ -3,11 +3,18 @@ import { calendarDateFromMinute, MINUTES_PER_DAY, type CalendarDate } from './ca
 import { appendChronicle, type Chronicle } from './chronicle.js';
 import { createClock, type ClockState } from './clock.js';
 import { grantReliefIfNeeded, tryEat } from './eating.js';
-import { createLedger, MARKET_ACCOUNT, recordMovement, type LedgerState } from './ledger.js';
+import {
+  createLedger,
+  getBalance,
+  MARKET_ACCOUNT,
+  recordMovement,
+  type LedgerState,
+} from './ledger.js';
 import {
   applyPurposeForDay,
   createNeeds,
   decayNeeds,
+  MAX_NEED,
   moodFactorFromMood,
   moodFromNeeds,
   type Needs,
@@ -98,6 +105,50 @@ export function createVillage(villageSeed: number, scenario: VillageScenario = {
     daysSinceLastHappening: 0,
     relationships: {},
   };
+}
+
+/** A bumper harvest adds half of today's village wheat stock as a one-off surplus; a visiting bard lifts everyone's fun for the day. Most happening cards are narrative-only for now - these two have an effect simple enough to apply directly, with no new persisted state. */
+const BUMPER_HARVEST_BONUS_FRACTION = 0.5;
+const VISITING_BARD_FUN_BOOST = 30;
+
+export function applyHappeningEffect(
+  happening: HappeningCard | null,
+  ledger: LedgerState,
+  minute: number,
+  villagerNeeds: Readonly<Record<string, Needs>>,
+): { ledger: LedgerState; villagerNeeds: Readonly<Record<string, Needs>> } {
+  if (happening?.id === 'bumper-harvest') {
+    const bonus = Math.round(
+      getBalance(ledger, 'village', 'wheat') * BUMPER_HARVEST_BONUS_FRACTION,
+    );
+    if (bonus > 0) {
+      return {
+        ledger: recordMovement(ledger, {
+          minute,
+          from: MARKET_ACCOUNT,
+          to: 'village',
+          item: 'wheat',
+          qty: bonus,
+          reason: 'bumper harvest',
+        }),
+        villagerNeeds,
+      };
+    }
+  }
+
+  if (happening?.id === 'visiting-bard') {
+    return {
+      ledger,
+      villagerNeeds: Object.fromEntries(
+        Object.entries(villagerNeeds).map(([id, needs]) => [
+          id,
+          { ...needs, fun: Math.min(MAX_NEED, needs.fun + VISITING_BARD_FUN_BOOST) },
+        ]),
+      ),
+    };
+  }
+
+  return { ledger, villagerNeeds };
 }
 
 export interface DayReport {
@@ -207,8 +258,12 @@ export function runVillageDay(state: VillageState): { state: VillageState; repor
     daysSinceLastHappening: state.daysSinceLastHappening,
     villagerIds,
     relationships,
+    weatherHistory: [...state.weatherHistory.map((day) => day.kind), weather.kind],
   });
   const daysSinceLastHappening = happening ? 0 : state.daysSinceLastHappening + 1;
+
+  const effect = applyHappeningEffect(happening, ledger, state.clock.minute, villagerNeeds);
+  ledger = effect.ledger;
 
   // chronicle
   if (happening) {
@@ -226,7 +281,7 @@ export function runVillageDay(state: VillageState): { state: VillageState; repor
     ...state,
     clock: { ...state.clock, minute: state.clock.minute + MINUTES_PER_DAY },
     ledger,
-    villagerNeeds,
+    villagerNeeds: effect.villagerNeeds,
     weatherHistory: [...state.weatherHistory, weather],
     chronicle,
     daysSinceLastHappening,

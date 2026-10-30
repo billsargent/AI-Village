@@ -1,6 +1,27 @@
+import type { HappeningCard } from '@ai-village/content';
 import { describe, expect, it } from 'vitest';
-import { getBalance } from './ledger.js';
-import { createVillage, runVillageDay, runVillageDays, SYSTEM_ORDER } from './systems.js';
+import { createLedger, getBalance, MARKET_ACCOUNT, recordMovement } from './ledger.js';
+import { createNeeds } from './needs.js';
+import {
+  applyHappeningEffect,
+  createVillage,
+  runVillageDay,
+  runVillageDays,
+  SYSTEM_ORDER,
+} from './systems.js';
+
+function happeningCard(id: string): HappeningCard {
+  return {
+    id,
+    title: id,
+    condition: { kind: 'always' },
+    weight: 1,
+    effect: '',
+    chronicleLine: '',
+    isDamageOrIllness: false,
+    decisionFor: null,
+  };
+}
 
 describe('SYSTEM_ORDER', () => {
   it('runs clock before weather before everything else, chronicle last', () => {
@@ -68,6 +89,57 @@ describe('runVillageDay', () => {
     const village = createVillage(1, { storytellerStyle: 'eventful' });
     const { state, report } = runVillageDay(village);
     expect(state.daysSinceLastHappening).toBe(report.happening ? 0 : 1);
+  });
+});
+
+describe('applyHappeningEffect', () => {
+  it('adds half the current wheat stock on a bumper harvest', () => {
+    const ledger = recordMovement(createLedger(), {
+      minute: 0,
+      from: MARKET_ACCOUNT,
+      to: 'village',
+      item: 'wheat',
+      qty: 20,
+      reason: 'opening stock',
+    });
+
+    const result = applyHappeningEffect(happeningCard('bumper-harvest'), ledger, 0, {});
+
+    expect(getBalance(result.ledger, 'village', 'wheat')).toBe(30);
+  });
+
+  it('does nothing on a bumper harvest with no wheat in store', () => {
+    const ledger = createLedger();
+    const result = applyHappeningEffect(happeningCard('bumper-harvest'), ledger, 0, {});
+    expect(getBalance(result.ledger, 'village', 'wheat')).toBe(0);
+  });
+
+  it("raises every villager's fun on a visiting bard, capped at the maximum", () => {
+    const villagerNeeds = {
+      ada: { ...createNeeds(), fun: 50 },
+      tobin: { ...createNeeds(), fun: 90 },
+    };
+
+    const result = applyHappeningEffect(
+      happeningCard('visiting-bard'),
+      createLedger(),
+      0,
+      villagerNeeds,
+    );
+
+    expect(result.villagerNeeds['ada']?.fun).toBe(80);
+    expect(result.villagerNeeds['tobin']?.fun).toBe(100);
+  });
+
+  it('leaves the ledger and needs unchanged for an unrelated happening, or none at all', () => {
+    const ledger = createLedger();
+    const villagerNeeds = { ada: createNeeds() };
+
+    const forOther = applyHappeningEffect(happeningCard('stray-cat'), ledger, 0, villagerNeeds);
+    expect(forOther).toEqual({ ledger, villagerNeeds });
+
+    const forNone = applyHappeningEffect(null, ledger, 0, villagerNeeds);
+    expect(forNone).toEqual({ ledger, villagerNeeds });
   });
 });
 
