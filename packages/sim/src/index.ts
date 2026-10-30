@@ -18,3 +18,4 @@ export * from './chronicle.js';
 export * from './relationships.js';
 export * from './storyteller.js';
 export * from './systems.js';
+export * from './commands.js';
