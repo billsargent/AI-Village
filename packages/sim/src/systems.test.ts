@@ -32,6 +32,47 @@ describe('SYSTEM_ORDER', () => {
   });
 });
 
+describe('createVillage', () => {
+  it('defaults a villager with no role to villager', () => {
+    const village = createVillage(1, {
+      villagers: [
+        { villagerId: 'ada', tradeId: 'farmer', skillLevel: 1, hasTool: false, moodFactor: 1 },
+      ],
+    });
+    expect(village.villagers[0]?.role).toBe('villager');
+  });
+
+  it('keeps an explicitly given role', () => {
+    const village = createVillage(1, {
+      villagers: [
+        {
+          villagerId: 'hesper',
+          tradeId: 'mayor',
+          skillLevel: 1,
+          hasTool: false,
+          moodFactor: 1,
+          role: 'mayor',
+        },
+      ],
+    });
+    expect(village.villagers[0]?.role).toBe('mayor');
+  });
+
+  it('rejects a village with more than one Mayor', () => {
+    const villagerOf = (id: string) => ({
+      villagerId: id,
+      tradeId: 'mayor',
+      skillLevel: 1,
+      hasTool: false,
+      moodFactor: 1,
+      role: 'mayor' as const,
+    });
+    expect(() =>
+      createVillage(1, { villagers: [villagerOf('hesper'), villagerOf('ada')] }),
+    ).toThrow(/only one Mayor/);
+  });
+});
+
 describe('runVillageDay', () => {
   it('advances the clock by exactly one day', () => {
     const { state } = runVillageDay(createVillage(1));

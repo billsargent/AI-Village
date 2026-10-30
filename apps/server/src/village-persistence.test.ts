@@ -37,7 +37,14 @@ describe('village persistence round trip', () => {
   it('survives save and reload after running a headless village for 30 days', async () => {
     const { state } = runVillageDays(42, 30, {
       villagers: [
-        { villagerId: 'mayor', tradeId: 'mayor', skillLevel: 1, hasTool: false, moodFactor: 1 },
+        {
+          villagerId: 'mayor',
+          tradeId: 'mayor',
+          skillLevel: 1,
+          hasTool: false,
+          moodFactor: 1,
+          role: 'mayor',
+        },
         { villagerId: 'ada', tradeId: 'farmer', skillLevel: 2, hasTool: true, moodFactor: 1 },
         { villagerId: 'wren', tradeId: 'innkeeper', skillLevel: 1, hasTool: false, moodFactor: 1 },
       ],
@@ -70,5 +77,6 @@ describe('village persistence round trip', () => {
     expect(reloaded.relationships).toEqual(state.relationships);
     expect(reloaded.villagerNeeds).toEqual(state.villagerNeeds);
     expect(reloaded.builtBuildingIds).toEqual(state.builtBuildingIds);
+    expect(reloaded.villagers).toEqual(state.villagers);
   });
 });

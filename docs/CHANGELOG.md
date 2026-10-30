@@ -47,3 +47,7 @@
 - A minimal village notice board (posts archived after 14 days), the
   `PostOnBoard` command, its tool-registry wiring, and DB persistence
   (#86).
+- Villager roles: a `role` field (defaulting to `villager`, at most one
+  Mayor per village), flowing through `facts()` - the spec's own facts
+  block shows the Mayor by role rather than trade - and DB persistence
+  (#88).

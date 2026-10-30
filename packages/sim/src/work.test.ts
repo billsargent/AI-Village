@@ -26,7 +26,14 @@ describe('runStint', () => {
     const ledger = fund('treasury', 'coins', 10);
     const result = runStint(
       ledger,
-      { villagerId: 'ada', tradeId: 'farmer', skillLevel: 1, hasTool: false, moodFactor: 1 },
+      {
+        villagerId: 'ada',
+        tradeId: 'farmer',
+        skillLevel: 1,
+        hasTool: false,
+        moodFactor: 1,
+        role: 'villager',
+      },
       BASE_CONTEXT,
     );
     expect(result.waiting).toBeNull();
@@ -40,7 +47,14 @@ describe('runStint', () => {
     const ledger = fund('treasury', 'coins', 10);
     const result = runStint(
       ledger,
-      { villagerId: 'tobin', tradeId: 'baker', skillLevel: 1, hasTool: false, moodFactor: 1 },
+      {
+        villagerId: 'tobin',
+        tradeId: 'baker',
+        skillLevel: 1,
+        hasTool: false,
+        moodFactor: 1,
+        role: 'villager',
+      },
       BASE_CONTEXT,
     );
     expect(result.waiting).toBe('No flour: the bakery needs flour');
@@ -61,7 +75,14 @@ describe('runStint', () => {
     });
     const result = runStint(
       ledger,
-      { villagerId: 'tobin', tradeId: 'baker', skillLevel: 1, hasTool: false, moodFactor: 1 },
+      {
+        villagerId: 'tobin',
+        tradeId: 'baker',
+        skillLevel: 1,
+        hasTool: false,
+        moodFactor: 1,
+        role: 'villager',
+      },
       BASE_CONTEXT,
     );
     expect(result.waiting).toBeNull();
@@ -73,7 +94,14 @@ describe('runStint', () => {
     const ledger = fund('treasury', 'coins', 10);
     const result = runStint(
       ledger,
-      { villagerId: 'ada', tradeId: 'farmer', skillLevel: 1, hasTool: false, moodFactor: 1 },
+      {
+        villagerId: 'ada',
+        tradeId: 'farmer',
+        skillLevel: 1,
+        hasTool: false,
+        moodFactor: 1,
+        role: 'villager',
+      },
       { ...BASE_CONTEXT, season: 'autumn' },
     );
     expect(result.produced.wheat).toBe(9); // 6 * 1.5
@@ -83,7 +111,14 @@ describe('runStint', () => {
     const ledger = fund('treasury', 'coins', 10);
     const result = runStint(
       ledger,
-      { villagerId: 'finn', tradeId: 'fisher', skillLevel: 1, hasTool: false, moodFactor: 1 },
+      {
+        villagerId: 'finn',
+        tradeId: 'fisher',
+        skillLevel: 1,
+        hasTool: false,
+        moodFactor: 1,
+        role: 'villager',
+      },
       { ...BASE_CONTEXT, weather: 'storm' },
     );
     expect(result.waiting).toContain('fisher');
@@ -94,7 +129,14 @@ describe('runStint', () => {
     const ledger = fund('treasury', 'coins', 10);
     const result = runStint(
       ledger,
-      { villagerId: 'ada', tradeId: 'farmer', skillLevel: 5, hasTool: true, moodFactor: 1 },
+      {
+        villagerId: 'ada',
+        tradeId: 'farmer',
+        skillLevel: 5,
+        hasTool: true,
+        moodFactor: 1,
+        role: 'villager',
+      },
       BASE_CONTEXT,
     );
     // 6 * (1 + 0.05*4) * 1.2 = 6 * 1.2 * 1.2 = 8.64 -> rounds to 9
@@ -105,7 +147,14 @@ describe('runStint', () => {
     const ledger = fund('treasury', 'coins', 10);
     const result = runStint(
       ledger,
-      { villagerId: 'ada', tradeId: 'farmer', skillLevel: 1, hasTool: false, moodFactor: 0.5 },
+      {
+        villagerId: 'ada',
+        tradeId: 'farmer',
+        skillLevel: 1,
+        hasTool: false,
+        moodFactor: 0.5,
+        role: 'villager',
+      },
       BASE_CONTEXT,
     );
     expect(result.produced.wheat).toBe(3);

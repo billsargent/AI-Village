@@ -1,3 +1,4 @@
+import { DEFAULT_ROLE } from '@ai-village/content';
 import {
   calendarDateFromMinute,
   getBalance,
@@ -12,6 +13,7 @@ const MAX_FACTS_LINES = 40;
 export interface VillagerFact {
   id: string;
   tradeId: string;
+  role: string;
 }
 
 /**
@@ -106,6 +108,7 @@ export function facts(state: VillageState, _viewer: string, _purpose: string): F
     villagers: state.villagers.map((villager) => ({
       id: villager.villagerId,
       tradeId: villager.tradeId,
+      role: villager.role,
     })),
     builtBuildingIds: state.builtBuildingIds,
     stores: storesFromLedger(state),
@@ -133,7 +136,9 @@ export function renderFacts(snapshot: FactsSnapshot): string {
       (snapshot.festival ? ` - ${snapshot.festival}` : ''),
   );
 
-  const people = snapshot.villagers.map((v) => `${v.id} (${v.tradeId})`).join(', ');
+  const people = snapshot.villagers
+    .map((v) => `${v.id} (${v.role === DEFAULT_ROLE ? v.tradeId : v.role})`)
+    .join(', ');
   lines.push(`People (${snapshot.population}): ${people || 'none yet'}`);
 
   lines.push(

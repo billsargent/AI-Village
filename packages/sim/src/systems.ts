@@ -1,4 +1,4 @@
-import { HAPPENINGS, type HappeningCard } from '@ai-village/content';
+import { DEFAULT_ROLE, HAPPENINGS, type HappeningCard, type RoleId } from '@ai-village/content';
 import { archiveOldBoardPosts, createBoard, type BoardState } from './board.js';
 import { calendarDateFromMinute, MINUTES_PER_DAY, type CalendarDate } from './calendar.js';
 import { appendChronicle, type Chronicle } from './chronicle.js';
@@ -81,11 +81,22 @@ export interface StartingStock {
 }
 
 export interface VillageScenario {
-  villagers?: readonly WorkerAssignment[];
+  /** Role defaults to `villager` when omitted. */
+  villagers?: readonly (Omit<WorkerAssignment, 'role'> & { role?: RoleId })[];
   builtBuildingIds?: readonly string[];
   /** Opening stock (e.g. a starting treasury) funded from the market account. */
   startingStock?: readonly StartingStock[];
   storytellerStyle?: StorytellerStyle;
+}
+
+/** A village can have only one Mayor at a time (spec section 12: "The Mayor" is a single, named position). */
+function validateRoles(villagers: readonly WorkerAssignment[]): void {
+  const mayors = villagers.filter((villager) => villager.role === 'mayor');
+  if (mayors.length > 1) {
+    throw new Error(
+      `A village can have only one Mayor, found ${mayors.length}: ${mayors.map((v) => v.villagerId).join(', ')}`,
+    );
+  }
 }
 
 export function createVillage(villageSeed: number, scenario: VillageScenario = {}): VillageState {
@@ -100,7 +111,11 @@ export function createVillage(villageSeed: number, scenario: VillageScenario = {
       reason: 'opening stock',
     });
   }
-  const villagers = scenario.villagers ?? [];
+  const villagers: WorkerAssignment[] = (scenario.villagers ?? []).map((villager) => ({
+    ...villager,
+    role: villager.role ?? DEFAULT_ROLE,
+  }));
+  validateRoles(villagers);
   return {
     villageSeed,
     clock: createClock(),
