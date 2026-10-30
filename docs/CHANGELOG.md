@@ -40,3 +40,7 @@
   happening condition unlocking "a traveller asks for work", and a DB
   migration so more than one instance of a building can be persisted
   (#82).
+- A minimal downriver orders system (a seeded daily chance of a new
+  order, automatic delivery with a late-order half-reward penalty), the
+  `AcceptOrder`/`DeclineOrder` commands, their tool-registry wiring, and
+  DB persistence for orders (#84).

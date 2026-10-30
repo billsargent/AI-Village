@@ -1,8 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { apply, CommandError } from './commands.js';
 import { getBalance, InsufficientBalanceError } from './ledger.js';
+import type { Order } from './orders.js';
 import { getRelationship } from './relationships.js';
-import { createVillage } from './systems.js';
+import { createVillage, type VillageState } from './systems.js';
+
+function villageWithOrder(order: Partial<Order> = {}): VillageState {
+  const village = createVillage(1);
+  const fullOrder: Order = {
+    id: 1,
+    source: 'downriver',
+    items: [{ good: 'bread', qty: 10 }],
+    reward: 20,
+    dueDay: 20,
+    status: 'pending',
+    ...order,
+  };
+  return { ...village, orders: { orders: [fullOrder], nextId: 2 } };
+}
 
 function villageWithTwo() {
   return createVillage(1, {
@@ -128,5 +143,38 @@ describe('apply ProposeBuilding', () => {
     expect(() => apply(village, { kind: 'ProposeBuilding', buildingId: 'cottage' })).toThrow(
       InsufficientBalanceError,
     );
+  });
+});
+
+describe('apply AcceptOrder / DeclineOrder', () => {
+  it('accepts a pending order', () => {
+    const village = villageWithOrder();
+    const { state, events } = apply(village, { kind: 'AcceptOrder', orderId: 1 });
+    expect(state.orders.orders[0]?.status).toBe('accepted');
+    expect(events).toEqual([{ kind: 'OrderAccepted', orderId: 1 }]);
+  });
+
+  it('declines a pending order', () => {
+    const village = villageWithOrder();
+    const { state, events } = apply(village, { kind: 'DeclineOrder', orderId: 1 });
+    expect(state.orders.orders[0]?.status).toBe('declined');
+    expect(events).toEqual([{ kind: 'OrderDeclined', orderId: 1 }]);
+  });
+
+  it('appends a public chronicle entry', () => {
+    const village = villageWithOrder();
+    const { state } = apply(village, { kind: 'AcceptOrder', orderId: 1 });
+    expect(state.chronicle.at(-1)).toMatchObject({ kind: 'order-decision', public: true });
+  });
+
+  it('rejects an unknown order', () => {
+    const village = createVillage(1);
+    expect(() => apply(village, { kind: 'AcceptOrder', orderId: 99 })).toThrow(CommandError);
+  });
+
+  it('rejects deciding on an order that is not pending', () => {
+    const village = villageWithOrder({ status: 'accepted' });
+    expect(() => apply(village, { kind: 'AcceptOrder', orderId: 1 })).toThrow(CommandError);
+    expect(() => apply(village, { kind: 'DeclineOrder', orderId: 1 })).toThrow(CommandError);
   });
 });

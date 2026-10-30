@@ -15,6 +15,13 @@
       "when": 1793401755818,
       "tag": "0001_organic_swarm",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793402249603,
+      "tag": "0002_boring_ricochet",
+      "breakpoints": true
     }
   ]
 }

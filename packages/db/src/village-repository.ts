@@ -75,6 +75,15 @@ export interface ChronicleEntryRow {
   public: boolean;
 }
 
+export interface OrderRow {
+  id: number;
+  source: string;
+  items: readonly { good: string; qty: number }[];
+  reward: number;
+  dueDay: number;
+  status: string;
+}
+
 export interface VillageSnapshot {
   clock: ClockRow;
   builtBuildingIds: readonly string[];
@@ -85,6 +94,7 @@ export interface VillageSnapshot {
   balances: readonly BalanceRow[];
   weatherDays: readonly WeatherDayRow[];
   chronicle: readonly ChronicleEntryRow[];
+  orders: readonly OrderRow[];
 }
 
 const CLOCK_ROW_ID = 1;
@@ -140,6 +150,13 @@ export async function saveVillage(db: Database, snapshot: VillageSnapshot): Prom
           snapshot.chronicle.map((entry) => ({ ...entry, actors: JSON.stringify(entry.actors) })),
         );
     }
+
+    await tx.delete(schema.orders);
+    if (snapshot.orders.length > 0) {
+      await tx
+        .insert(schema.orders)
+        .values(snapshot.orders.map((order) => ({ ...order, items: JSON.stringify(order.items) })));
+    }
   });
 }
 
@@ -162,6 +179,7 @@ export async function loadVillage(db: Database): Promise<VillageSnapshot | null>
   const balanceRows = await db.select().from(schema.balances).all();
   const weatherRows = await db.select().from(schema.weatherDays).all();
   const chronicleRows = await db.select().from(schema.chronicle).all();
+  const orderRows = await db.select().from(schema.orders).all();
 
   return {
     clock: {
@@ -194,6 +212,14 @@ export async function loadVillage(db: Database): Promise<VillageSnapshot | null>
       actors: JSON.parse(row.actors) as string[],
       importance: row.importance,
       public: row.public,
+    })),
+    orders: orderRows.map((row) => ({
+      id: row.id,
+      source: row.source,
+      items: JSON.parse(row.items) as { good: string; qty: number }[],
+      reward: row.reward,
+      dueDay: row.dueDay,
+      status: row.status,
     })),
   };
 }

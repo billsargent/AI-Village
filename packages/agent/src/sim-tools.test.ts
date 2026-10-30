@@ -1,7 +1,26 @@
-import { createVillage, getBalance } from '@ai-village/sim';
+import { createVillage, getBalance, type Order, type VillageState } from '@ai-village/sim';
 import { describe, expect, it } from 'vitest';
-import { GIFT_TOOL, PROPOSE_BUILDING_TOOL, SIM_TOOLS } from './sim-tools.js';
+import {
+  ACCEPT_ORDER_TOOL,
+  DECLINE_ORDER_TOOL,
+  GIFT_TOOL,
+  PROPOSE_BUILDING_TOOL,
+  SIM_TOOLS,
+} from './sim-tools.js';
 import { resolveVillagerTools, ToolRegistry } from './tools.js';
+
+function villageWithOrder(): VillageState {
+  const village = createVillage(1);
+  const order: Order = {
+    id: 1,
+    source: 'downriver',
+    items: [{ good: 'bread', qty: 10 }],
+    reward: 20,
+    dueDay: 20,
+    status: 'pending',
+  };
+  return { ...village, orders: { orders: [order], nextId: 2 } };
+}
 
 describe('GIFT_TOOL', () => {
   it('runs the GiveGift command against the sim state', () => {
@@ -65,10 +84,46 @@ describe('PROPOSE_BUILDING_TOOL', () => {
   });
 });
 
+describe('ACCEPT_ORDER_TOOL', () => {
+  it('runs the AcceptOrder command against the sim state', () => {
+    const village = villageWithOrder();
+    const args = ACCEPT_ORDER_TOOL.args.parse({ orderId: 1 });
+    const result = ACCEPT_ORDER_TOOL.run?.(args, { state: village }) as {
+      state: typeof village;
+      events: unknown[];
+    };
+
+    expect(result.state.orders.orders[0]?.status).toBe('accepted');
+    expect(result.events).toEqual([{ kind: 'OrderAccepted', orderId: 1 }]);
+  });
+
+  it('is a risk-none game action granted to the Mayor role', () => {
+    expect(ACCEPT_ORDER_TOOL.kind).toBe('game');
+    expect(ACCEPT_ORDER_TOOL.risk).toBe('none');
+    const registry = new ToolRegistry();
+    registry.register(ACCEPT_ORDER_TOOL);
+    expect(resolveVillagerTools(registry, 'mayor', [])).toEqual(['accept_order']);
+  });
+});
+
+describe('DECLINE_ORDER_TOOL', () => {
+  it('runs the DeclineOrder command against the sim state', () => {
+    const village = villageWithOrder();
+    const args = DECLINE_ORDER_TOOL.args.parse({ orderId: 1 });
+    const result = DECLINE_ORDER_TOOL.run?.(args, { state: village }) as {
+      state: typeof village;
+      events: unknown[];
+    };
+
+    expect(result.state.orders.orders[0]?.status).toBe('declined');
+    expect(result.events).toEqual([{ kind: 'OrderDeclined', orderId: 1 }]);
+  });
+});
+
 describe('SIM_TOOLS', () => {
-  it('contains both tools with unique ids', () => {
+  it('contains every sim tool with unique ids', () => {
     expect(new Set(SIM_TOOLS.map((tool) => tool.id))).toEqual(
-      new Set(['gift', 'propose_building']),
+      new Set(['gift', 'propose_building', 'accept_order', 'decline_order']),
     );
   });
 });

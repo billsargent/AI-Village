@@ -81,6 +81,16 @@ const SAMPLE_SNAPSHOT: VillageSnapshot = {
       public: true,
     },
   ],
+  orders: [
+    {
+      id: 1,
+      source: 'downriver',
+      items: [{ good: 'bread', qty: 10 }],
+      reward: 30,
+      dueDay: 12,
+      status: 'accepted',
+    },
+  ],
 };
 
 describe('saveVillage / loadVillage', () => {

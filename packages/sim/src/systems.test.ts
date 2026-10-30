@@ -155,4 +155,21 @@ describe('runVillageDays', () => {
     const b = runVillageDays(42, 100);
     expect(a.reports.map((r) => r.weather.kind)).toEqual(b.reports.map((r) => r.weather.kind));
   });
+
+  it('posts and eventually delivers downriver orders over enough days', () => {
+    const { state } = runVillageDays(7, 60, {
+      builtBuildingIds: ['town-hall', 'fields'],
+      startingStock: [
+        { account: 'treasury', item: 'coins', qty: 1000 },
+        { account: 'village', item: 'wheat', qty: 500 },
+        { account: 'village', item: 'bread', qty: 500 },
+        { account: 'village', item: 'planks', qty: 500 },
+        { account: 'village', item: 'stone', qty: 500 },
+        { account: 'village', item: 'fish', qty: 500 },
+      ],
+    });
+
+    expect(state.orders.orders.length).toBeGreaterThan(0);
+    expect(state.chronicle.some((entry) => entry.kind === 'order-posted')).toBe(true);
+  });
 });

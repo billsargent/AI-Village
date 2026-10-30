@@ -6,27 +6,32 @@
  * is sim's job, the same as the rest of the economy, and both the agent
  * and a future owner UI call the same `apply()`.
  *
- * Of the five commands spec section 2 names, two have a mechanic already
- * buildable from what the sim has (`GiveGift`, `ProposeBuilding`);
- * `AcceptOrder`, `PostOnBoard` and `CallVote` wait on sim features that
- * don't exist yet (orders, the board, villager roles) - see issues
- * #69-#71.
+ * Of the five commands spec section 2 names, three have a mechanic now
+ * buildable from what the sim has (`GiveGift`, `ProposeBuilding`,
+ * `AcceptOrder`/`DeclineOrder`); `PostOnBoard` and `CallVote` still wait
+ * on sim features that don't exist yet (the board, villager roles) -
+ * see issues #70-#71.
  */
 
 import { getBuilding, getGood } from '@ai-village/content';
 import { calendarDateFromMinute } from './calendar.js';
 import { appendChronicle } from './chronicle.js';
 import { MARKET_ACCOUNT, recordMovement } from './ledger.js';
+import type { OrderStatus } from './orders.js';
 import { applyGift } from './relationships.js';
 import type { VillageState } from './systems.js';
 
 export type Command =
   | { kind: 'GiveGift'; from: string; to: string; item: string; qty: number }
-  | { kind: 'ProposeBuilding'; buildingId: string };
+  | { kind: 'ProposeBuilding'; buildingId: string }
+  | { kind: 'AcceptOrder'; orderId: number }
+  | { kind: 'DeclineOrder'; orderId: number };
 
 export type DomainEvent =
   | { kind: 'GiftGiven'; from: string; to: string; item: string; qty: number }
-  | { kind: 'BuildingFinished'; buildingId: string };
+  | { kind: 'BuildingFinished'; buildingId: string }
+  | { kind: 'OrderAccepted'; orderId: number }
+  | { kind: 'OrderDeclined'; orderId: number };
 
 export interface CommandResult {
   state: VillageState;
@@ -42,6 +47,10 @@ export function apply(state: VillageState, command: Command): CommandResult {
       return applyGiveGift(state, command);
     case 'ProposeBuilding':
       return applyProposeBuilding(state, command);
+    case 'AcceptOrder':
+      return applyOrderDecision(state, command.orderId, 'accepted');
+    case 'DeclineOrder':
+      return applyOrderDecision(state, command.orderId, 'declined');
   }
 }
 
@@ -149,5 +158,48 @@ function applyProposeBuilding(state: VillageState, command: { buildingId: string
       chronicle,
     },
     events: [{ kind: 'BuildingFinished', buildingId: building.id }],
+  };
+}
+
+function applyOrderDecision(
+  state: VillageState,
+  orderId: number,
+  decision: Extract<OrderStatus, 'accepted' | 'declined'>,
+): CommandResult {
+  const order = state.orders.orders.find((candidate) => candidate.id === orderId);
+  if (!order) {
+    throw new CommandError(`Unknown order #${orderId}`);
+  }
+  if (order.status !== 'pending') {
+    throw new CommandError(`Order #${orderId} is not pending (status: ${order.status})`);
+  }
+
+  const orders = {
+    ...state.orders,
+    orders: state.orders.orders.map((candidate) =>
+      candidate.id === orderId ? { ...candidate, status: decision } : candidate,
+    ),
+  };
+
+  const itemsText = order.items.map((item) => `${item.qty} ${item.good}`).join(', ');
+  const chronicle = appendChronicle(state.chronicle, {
+    minute: state.clock.minute,
+    kind: 'order-decision',
+    text:
+      decision === 'accepted'
+        ? `The Mayor accepted an order for ${itemsText}.`
+        : `The Mayor declined an order for ${itemsText}.`,
+    actors: [],
+    importance: 2,
+    public: true,
+  });
+
+  return {
+    state: { ...state, orders, chronicle },
+    events: [
+      decision === 'accepted'
+        ? { kind: 'OrderAccepted', orderId }
+        : { kind: 'OrderDeclined', orderId },
+    ],
   };
 }

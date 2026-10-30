@@ -1,9 +1,9 @@
 /**
- * The tool registry's first two real, runnable tools (spec section 12's
- * roles table: Villager gets "gift", Mayor gets "propose building"), now
- * that `apply(command)` exists for both (#68). Both are game actions -
- * risk none, never needing approval - so they run straight against the
- * sim through `apply()`.
+ * The tool registry's real, runnable tools (spec section 12's roles
+ * table: Villager gets "gift", Mayor gets "propose building" and
+ * "accept orders"), now that `apply(command)` exists for each (#68,
+ * #84). All are game actions - risk none, never needing approval - so
+ * they run straight against the sim through `apply()`.
  */
 
 import { apply } from '@ai-village/sim';
@@ -43,4 +43,37 @@ export const PROPOSE_BUILDING_TOOL = defineTool({
   run: (args, ctx) => apply(ctx.state, { kind: 'ProposeBuilding', ...args }),
 });
 
-export const SIM_TOOLS = [GIFT_TOOL, PROPOSE_BUILDING_TOOL] as const;
+export const ACCEPT_ORDER_TOOL = defineTool({
+  id: 'accept_order',
+  title: 'Accept an order',
+  kind: 'game',
+  risk: 'none',
+  approval: 'never',
+  roles: ['mayor'],
+  purposes: ['chat'],
+  costUsd: 0,
+  args: z.object({ orderId: z.number() }),
+  preview: (args) => `Accept order #${args.orderId}`,
+  run: (args, ctx) => apply(ctx.state, { kind: 'AcceptOrder', ...args }),
+});
+
+export const DECLINE_ORDER_TOOL = defineTool({
+  id: 'decline_order',
+  title: 'Decline an order',
+  kind: 'game',
+  risk: 'none',
+  approval: 'never',
+  roles: ['mayor'],
+  purposes: ['chat'],
+  costUsd: 0,
+  args: z.object({ orderId: z.number() }),
+  preview: (args) => `Decline order #${args.orderId}`,
+  run: (args, ctx) => apply(ctx.state, { kind: 'DeclineOrder', ...args }),
+});
+
+export const SIM_TOOLS = [
+  GIFT_TOOL,
+  PROPOSE_BUILDING_TOOL,
+  ACCEPT_ORDER_TOOL,
+  DECLINE_ORDER_TOOL,
+] as const;
