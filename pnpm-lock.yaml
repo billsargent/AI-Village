@@ -244,6 +244,9 @@ importers:
       '@ai-village/sim':
         specifier: workspace:*
         version: link:../sim
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
 
   packages/content:
     dependencies:
