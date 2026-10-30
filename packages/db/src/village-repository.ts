@@ -24,6 +24,7 @@ export interface VillagerRow {
   tradeId: string;
   skillLevel: number;
   hasTool: boolean;
+  role: string;
 }
 
 export interface NeedsRow {

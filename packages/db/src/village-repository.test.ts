@@ -44,7 +44,7 @@ const SAMPLE_SNAPSHOT: VillageSnapshot = {
     daysSinceLastHappening: 2,
   },
   builtBuildingIds: ['town-hall', 'fields', 'fields'],
-  villagers: [{ id: 'ada', tradeId: 'farmer', skillLevel: 2, hasTool: true }],
+  villagers: [{ id: 'ada', tradeId: 'farmer', skillLevel: 2, hasTool: true, role: 'villager' }],
   needs: [
     { villagerId: 'ada', hunger: 80, energy: 90, social: 70, fun: 60, comfort: 100, purpose: 50 },
   ],

@@ -34,6 +34,7 @@ export const villagers = sqliteTable('villagers', {
   tradeId: text('trade_id').notNull(),
   skillLevel: integer('skill_level').notNull(),
   hasTool: integer('has_tool', { mode: 'boolean' }).notNull(),
+  role: text('role').notNull().default('villager'),
 });
 
 export const needs = sqliteTable('needs', {

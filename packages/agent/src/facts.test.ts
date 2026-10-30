@@ -17,7 +17,7 @@ describe('facts', () => {
   it('reports the clock, weather and population', () => {
     const snapshot = facts(villageWithStock(), 'owner', 'chat');
     expect(snapshot.population).toBe(1);
-    expect(snapshot.villagers).toEqual([{ id: 'ada', tradeId: 'farmer' }]);
+    expect(snapshot.villagers).toEqual([{ id: 'ada', tradeId: 'farmer', role: 'villager' }]);
     expect(snapshot.weekday).toBe('Moonday');
     expect(snapshot.season).toBe('spring');
     expect(snapshot.weather).toBe('clear');
@@ -94,5 +94,24 @@ describe('renderFacts', () => {
     const text = renderFacts(facts(empty, 'owner', 'chat'));
     expect(text).toContain('none built yet');
     expect(text).toContain('empty');
+  });
+
+  it('shows a non-default role instead of trade, like the spec facts block does for the Mayor', () => {
+    const village = createVillage(1, {
+      villagers: [
+        {
+          villagerId: 'hesper',
+          tradeId: 'farmer',
+          skillLevel: 1,
+          hasTool: false,
+          moodFactor: 1,
+          role: 'mayor',
+        },
+        { villagerId: 'ada', tradeId: 'farmer', skillLevel: 1, hasTool: false, moodFactor: 1 },
+      ],
+    });
+    const text = renderFacts(facts(village, 'owner', 'chat'));
+    expect(text).toContain('hesper (mayor)');
+    expect(text).toContain('ada (farmer)');
   });
 });

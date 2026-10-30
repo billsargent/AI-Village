@@ -8,4 +8,5 @@ export * from './goods.js';
 export * from './trades.js';
 export * from './buildings.js';
 export * from './traits.js';
+export * from './roles.js';
 export * from './happenings.js';

@@ -8,6 +8,7 @@ import type {
   Relationships,
   VillageState,
   WeatherDay,
+  WorkerAssignment,
 } from '@ai-village/sim';
 
 /**
@@ -34,6 +35,7 @@ export function toSnapshot(state: VillageState): VillageSnapshot {
       tradeId: villager.tradeId,
       skillLevel: villager.skillLevel,
       hasTool: villager.hasTool,
+      role: villager.role,
     })),
     needs: Object.entries(state.villagerNeeds).map(([villagerId, needs]) => ({
       villagerId,
@@ -154,6 +156,7 @@ export function fromSnapshot(snapshot: VillageSnapshot): VillageState {
       tradeId: row.tradeId,
       skillLevel: row.skillLevel,
       hasTool: row.hasTool,
+      role: row.role as WorkerAssignment['role'],
       moodFactor: 1,
     })),
     villagerNeeds: Object.fromEntries(

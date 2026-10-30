@@ -1,0 +1,1 @@
+ALTER TABLE `villagers` ADD `role` text DEFAULT 'villager' NOT NULL;

@@ -1,4 +1,4 @@
-import { getTrade } from '@ai-village/content';
+import { getTrade, type RoleId } from '@ai-village/content';
 import type { Season } from './calendar.js';
 import { getBalance, MARKET_ACCOUNT, recordMovement, type LedgerState } from './ledger.js';
 import { seededRandom } from './random.js';
@@ -15,6 +15,8 @@ export interface WorkerAssignment {
   hasTool: boolean;
   /** Hunger/mood slow work to as low as 50%, but never stop it (spec section 6). */
   moodFactor: number;
+  /** Decides which real-work tools they have (spec section 7); defaults to `villager`. */
+  role: RoleId;
 }
 
 export interface WorkContext {
