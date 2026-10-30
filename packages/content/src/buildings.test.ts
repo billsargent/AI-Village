@@ -25,4 +25,11 @@ describe('buildings table', () => {
     const ids = BUILDINGS.map((building) => building.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  it('marks only fields and cottage as multi-instance', () => {
+    const multiInstance = BUILDINGS.filter((building) => building.multiInstance).map(
+      (building) => building.id,
+    );
+    expect(new Set(multiInstance)).toEqual(new Set(['fields', 'cottage']));
+  });
 });

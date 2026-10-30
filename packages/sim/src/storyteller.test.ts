@@ -144,4 +144,22 @@ describe('pickHappening', () => {
     );
     expect(fires.some((result) => result?.id === 'streak')).toBe(true);
   });
+
+  it('fires the freeBedAvailable-style card only when built cottages outnumber villagers', () => {
+    const bedCard = card({ id: 'bed', condition: { kind: 'freeBedAvailable' } });
+    const noFreeBed = { ...BASE_CONTEXT, villagerIds: ['a'], builtBuildingIds: ['cottage'] };
+    const freeBed = {
+      ...BASE_CONTEXT,
+      villagerIds: ['a'],
+      builtBuildingIds: ['cottage', 'cottage'],
+    };
+
+    for (let day = 0; day < 30; day++) {
+      expect(pickHappening([bedCard], { ...noFreeBed, day })).toBeNull();
+    }
+    const fires = Array.from({ length: 30 }, (_, day) =>
+      pickHappening([bedCard], { ...freeBed, day }),
+    );
+    expect(fires.some((result) => result?.id === 'bed')).toBe(true);
+  });
 });

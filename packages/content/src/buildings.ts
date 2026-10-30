@@ -15,6 +15,8 @@ export const buildingSchema = z.object({
   workers: z.number().nonnegative(),
   /** Population count that unlocks this building, or null if it exists from the start. */
   unlocksAtPopulation: z.number().positive().nullable(),
+  /** Whether the village can have more than one (spec's facts-block example: "fields x4"; homes are numbered "Cottage 3"). Most buildings are one-of-a-kind. */
+  multiInstance: z.boolean(),
 });
 export type Building = z.infer<typeof buildingSchema>;
 
@@ -27,6 +29,7 @@ export const BUILDINGS = [
     buildDays: 0,
     workers: 1,
     unlocksAtPopulation: null,
+    multiInstance: false,
   },
   {
     id: 'inn',
@@ -35,6 +38,7 @@ export const BUILDINGS = [
     buildDays: 0,
     workers: 2,
     unlocksAtPopulation: null,
+    multiInstance: false,
   },
   {
     id: 'fields',
@@ -43,6 +47,7 @@ export const BUILDINGS = [
     buildDays: 1,
     workers: 2,
     unlocksAtPopulation: null,
+    multiInstance: true,
   },
   {
     id: 'workshop',
@@ -51,6 +56,7 @@ export const BUILDINGS = [
     buildDays: 2,
     workers: 1,
     unlocksAtPopulation: null,
+    multiInstance: false,
   },
   {
     id: 'cottage',
@@ -59,6 +65,7 @@ export const BUILDINGS = [
     buildDays: 2,
     workers: 0,
     unlocksAtPopulation: null,
+    multiInstance: true,
   },
   {
     id: 'bakery',
@@ -67,6 +74,7 @@ export const BUILDINGS = [
     buildDays: 3,
     workers: 1,
     unlocksAtPopulation: 4,
+    multiInstance: false,
   },
   {
     id: 'post-office',
@@ -75,6 +83,7 @@ export const BUILDINGS = [
     buildDays: 2,
     workers: 1,
     unlocksAtPopulation: 5,
+    multiInstance: false,
   },
   {
     id: 'shop',
@@ -83,6 +92,7 @@ export const BUILDINGS = [
     buildDays: 3,
     workers: 1,
     unlocksAtPopulation: 5,
+    multiInstance: false,
   },
   {
     id: 'mill',
@@ -97,6 +107,7 @@ export const BUILDINGS = [
     buildDays: 4,
     workers: 1,
     unlocksAtPopulation: null,
+    multiInstance: false,
   },
   {
     id: 'forest-hut',
@@ -105,6 +116,7 @@ export const BUILDINGS = [
     buildDays: 1,
     workers: 1,
     unlocksAtPopulation: null,
+    multiInstance: false,
   },
   {
     id: 'smokehouse',
@@ -113,6 +125,7 @@ export const BUILDINGS = [
     buildDays: 2,
     workers: 0,
     unlocksAtPopulation: null,
+    multiInstance: false,
   },
   {
     id: 'smithy',
@@ -121,6 +134,7 @@ export const BUILDINGS = [
     buildDays: 4,
     workers: 1,
     unlocksAtPopulation: 7,
+    multiInstance: false,
   },
   {
     id: 'school',
@@ -129,6 +143,7 @@ export const BUILDINGS = [
     buildDays: 5,
     workers: 1,
     unlocksAtPopulation: 8,
+    multiInstance: false,
   },
   {
     id: 'chapel',
@@ -137,6 +152,7 @@ export const BUILDINGS = [
     buildDays: 5,
     workers: 0,
     unlocksAtPopulation: 8,
+    multiInstance: false,
   },
   {
     id: 'clocktower',
@@ -145,6 +161,7 @@ export const BUILDINGS = [
     buildDays: 6,
     workers: 0,
     unlocksAtPopulation: 10,
+    multiInstance: false,
   },
   {
     id: 'riverside-jetty',
@@ -153,6 +170,7 @@ export const BUILDINGS = [
     buildDays: 0,
     workers: 1,
     unlocksAtPopulation: null,
+    multiInstance: false,
   },
   {
     id: 'gardens',
@@ -161,6 +179,7 @@ export const BUILDINGS = [
     buildDays: 1,
     workers: 1,
     unlocksAtPopulation: null,
+    multiInstance: false,
   },
   {
     id: 'cottage-garden',
@@ -169,6 +188,7 @@ export const BUILDINGS = [
     buildDays: 1,
     workers: 1,
     unlocksAtPopulation: null,
+    multiInstance: false,
   },
 ] as const satisfies readonly Building[];
 

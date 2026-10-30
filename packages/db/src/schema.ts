@@ -25,7 +25,8 @@ export const clock = sqliteTable('clock', {
 });
 
 export const builtBuildings = sqliteTable('built_buildings', {
-  buildingId: text('building_id').primaryKey(),
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  buildingId: text('building_id').notNull(),
 });
 
 export const villagers = sqliteTable('villagers', {

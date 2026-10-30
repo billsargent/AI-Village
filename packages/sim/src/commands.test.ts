@@ -105,6 +105,15 @@ describe('apply ProposeBuilding', () => {
     );
   });
 
+  it('allows a second instance of a multi-instance building, like fields', () => {
+    const village = createVillage(1, {
+      builtBuildingIds: ['fields'],
+      startingStock: [{ account: 'treasury', item: 'coins', qty: 100 }],
+    });
+    const { state } = apply(village, { kind: 'ProposeBuilding', buildingId: 'fields' });
+    expect(state.builtBuildingIds).toEqual(['fields', 'fields']);
+  });
+
   it('rejects a building whose population requirement is not met', () => {
     const village = createVillage(1, {
       startingStock: [{ account: 'treasury', item: 'coins', qty: 1000 }],

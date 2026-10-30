@@ -78,6 +78,10 @@ function simpleConditionHolds(
       );
     case 'weatherStreak':
       return hasWeatherStreak(context.weatherHistory, condition.weather, condition.days);
+    case 'freeBedAvailable': {
+      const cottages = context.builtBuildingIds.filter((id) => id === 'cottage').length;
+      return context.villagerIds.length < cottages;
+    }
   }
 }
 

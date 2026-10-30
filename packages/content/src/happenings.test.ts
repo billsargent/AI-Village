@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HAPPENINGS } from './happenings.js';
+import { HAPPENINGS, type HappeningCard } from './happenings.js';
 
 describe('happenings table', () => {
   it('has all 11 spec section 5 cards', () => {
@@ -16,11 +16,16 @@ describe('happenings table', () => {
     expect(new Set(flagged)).toEqual(new Set(['chimney-fire', 'illness']));
   });
 
-  it('marks the one card that still needs unmodeled state as notYetModeled', () => {
-    const notYetModeled = HAPPENINGS.filter((card) => card.condition.kind === 'notYetModeled').map(
-      (card) => card.id,
+  it('gives every card a real condition - none are notYetModeled anymore', () => {
+    const notYetModeled = (HAPPENINGS as readonly HappeningCard[]).filter(
+      (card) => card.condition.kind === 'notYetModeled',
     );
-    expect(new Set(notYetModeled)).toEqual(new Set(['traveller-asks-for-work']));
+    expect(notYetModeled).toEqual([]);
+  });
+
+  it('gives "a traveller asks for work" a free-bed condition', () => {
+    const traveller = HAPPENINGS.find((card) => card.id === 'traveller-asks-for-work');
+    expect(traveller?.condition).toEqual({ kind: 'freeBedAvailable' });
   });
 
   it('gives quarrel and proposal real, relationship-based conditions', () => {
