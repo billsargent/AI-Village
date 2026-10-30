@@ -1,0 +1,5 @@
+// The deterministic village: clock, calendar, weather, ledger, economy,
+// needs, schedules, relationships, happenings, chronicle (spec section 5+).
+// Exposes facts() and apply(command) to the agent layer; never imports it.
+
+export const SIM_PACKAGE_VERSION = '0.0.0';

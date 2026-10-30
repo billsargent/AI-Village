@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../packages/content" },
+    { "path": "../../packages/sim" },
+    { "path": "../../packages/db" },
+    { "path": "../../packages/agent" },
+    { "path": "../../packages/integrations" }
+  ]
+}

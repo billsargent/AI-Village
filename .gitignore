@@ -1,0 +1,24 @@
+node_modules/
+dist/
+build/
+coverage/
+*.log
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+
+# Data folder (never committed)
+/data/
+*.db
+*.db-wal
+*.db-shm
+
+# Art build output
+art/vendor/
+art/build/
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
