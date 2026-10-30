@@ -14,6 +14,7 @@ export default [
       'apps/**/*.tsx',
       'tools/**/*.ts',
     ],
+    ignores: ['**/*.config.ts'],
     languageOptions: {
       parser: tsparser,
       parserOptions: {
@@ -31,7 +32,7 @@ export default [
     },
   },
   {
-    files: ['*.ts', '*.config.ts', '*.config.mjs', '*.mjs', 'tools/**/*.mjs'],
+    files: ['*.ts', '*.config.ts', '**/*.config.ts', '*.config.mjs', '*.mjs', 'tools/**/*.mjs'],
     languageOptions: {
       parser: tsparser,
       globals: { ...globals.node },

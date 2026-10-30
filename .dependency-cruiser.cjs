@@ -10,6 +10,22 @@ module.exports = {
       to: { path: '^(packages/agent|packages/integrations|apps/server)' },
     },
     {
+      name: 'db-only-imports-content',
+      severity: 'error',
+      comment:
+        'db may only depend on content; it must never import sim, agent, integrations or server.',
+      from: { path: '^packages/db' },
+      to: { path: '^(packages/sim|packages/agent|packages/integrations|apps/server)' },
+    },
+    {
+      name: 'integrations-only-imports-content',
+      severity: 'error',
+      comment:
+        'integrations may only depend on content; it must never import sim, db, agent or server.',
+      from: { path: '^packages/integrations' },
+      to: { path: '^(packages/sim|packages/db|packages/agent|apps/server)' },
+    },
+    {
       name: 'content-has-no-deps',
       severity: 'error',
       comment:

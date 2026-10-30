@@ -7,9 +7,15 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
-    "@ai-village/content": "workspace:*"
+    "@ai-village/content": "workspace:*",
+    "@libsql/client": "^0.14.0",
+    "drizzle-orm": "^0.38.3"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.30.1"
   }
 }
