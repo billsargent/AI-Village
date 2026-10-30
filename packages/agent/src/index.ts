@@ -3,3 +3,7 @@
 // through facts() and changes it only through apply(command).
 
 export const AGENT_PACKAGE_VERSION = '0.0.0';
+
+export * from './facts.js';
+export * from './tools.js';
+export * from './approvals.js';
