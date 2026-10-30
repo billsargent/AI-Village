@@ -30,6 +30,10 @@ export default [
       '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      // TypeScript's own checker already catches real undefined-variable
+      // use; no-undef is not type-aware and false-positives on ambient
+      // global types like RequestInit/Response from @types/node.
+      'no-undef': 'off',
     },
   },
   {

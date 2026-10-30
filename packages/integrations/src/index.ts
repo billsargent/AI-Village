@@ -3,3 +3,5 @@
 // world.
 
 export const INTEGRATIONS_PACKAGE_VERSION = '0.0.0';
+
+export * from './deepseek.js';
