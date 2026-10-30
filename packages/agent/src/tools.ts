@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { VillageState } from '@ai-village/sim';
 
 /** Game actions change only the sim; read never waits; real has an effect outside the app (spec section 12). */
 export const TOOL_KINDS = ['game', 'read', 'real'] as const;
@@ -9,6 +10,16 @@ export type ToolRisk = (typeof TOOL_RISKS)[number];
 
 export const TOOL_APPROVAL_MODES = ['never', 'per-session', 'each-time'] as const;
 export type ToolApprovalMode = (typeof TOOL_APPROVAL_MODES)[number];
+
+/**
+ * What a tool's `run`/`undo` gets besides its own args. `state` covers
+ * every `kind: 'game'` tool, since they change only the sim, via
+ * `apply()`. Real tools' context (files, mail, search) lands once
+ * `integrations` has something for them to call.
+ */
+export interface ToolRunContext {
+  state: VillageState;
+}
 
 // Registries and lookups hold many tools with different Args shapes
 // together, so their element type is deliberately `ToolDefinition` (Args
@@ -27,9 +38,8 @@ export interface ToolDefinition<Args = any> {
   args: z.ZodType<Args>;
   /** Builds a human-readable preview of what running the tool would do; absent for tools with nothing to preview. */
   preview?: (args: Args) => string;
-  /** Not implemented yet: real tool bodies land once `integrations` has something for them to call. */
-  run?: (args: Args) => unknown;
-  undo?: (record: unknown) => unknown;
+  run?: (args: Args, ctx: ToolRunContext) => unknown;
+  undo?: (record: unknown, ctx: ToolRunContext) => unknown;
 }
 
 /** Declares one tool. Spec section 12: "The registry is the only list of tools." */

@@ -25,3 +25,5 @@
   (#67).
 - `apply(command)`: `GiveGift` and `ProposeBuilding`, the sim's write side
   of the sim-agent interface (#68).
+- The tool registry's first two real tools, `gift` and `propose_building`,
+  wired to run against the sim via `apply()` (#73).
