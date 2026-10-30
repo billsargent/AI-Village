@@ -1,4 +1,6 @@
+import { HAPPENINGS, type HappeningCard } from '@ai-village/content';
 import { calendarDateFromMinute, MINUTES_PER_DAY, type CalendarDate } from './calendar.js';
+import { appendChronicle, type Chronicle } from './chronicle.js';
 import { createClock, type ClockState } from './clock.js';
 import { grantReliefIfNeeded, tryEat } from './eating.js';
 import { createLedger, MARKET_ACCOUNT, recordMovement, type LedgerState } from './ledger.js';
@@ -10,6 +12,7 @@ import {
   moodFromNeeds,
   type Needs,
 } from './needs.js';
+import { pickHappening, type StorytellerStyle } from './storyteller.js';
 import { chargeUpkeep } from './upkeep.js';
 import { runStint, type WorkerAssignment } from './work.js';
 import { drawWeather, type WeatherDay } from './weather.js';
@@ -19,9 +22,10 @@ const HOURS_PER_VILLAGE_DAY = 24;
 /**
  * The fixed order systems run in each village day (spec section 5). Work
  * and economy run one stint per villager per day, nightly upkeep, and
- * eating/relief; schedules, social and happenings are still named no-ops.
- * A real schedule (two stints a day, evenings, sleep) replaces this day-at-
- * a-time simplification once the schedules system lands.
+ * eating/relief; happenings and the chronicle now run too. Schedules and
+ * social are still named no-ops - a real schedule (two stints a day,
+ * evenings, sleep) replaces this day-at-a-time simplification once that
+ * system lands.
  */
 export const SYSTEM_ORDER = [
   'clock',
@@ -44,6 +48,9 @@ export interface VillageState {
   villagers: readonly WorkerAssignment[];
   villagerNeeds: Readonly<Record<string, Needs>>;
   builtBuildingIds: readonly string[];
+  storytellerStyle: StorytellerStyle;
+  chronicle: Chronicle;
+  daysSinceLastHappening: number;
 }
 
 export interface StartingStock {
@@ -57,6 +64,7 @@ export interface VillageScenario {
   builtBuildingIds?: readonly string[];
   /** Opening stock (e.g. a starting treasury) funded from the market account. */
   startingStock?: readonly StartingStock[];
+  storytellerStyle?: StorytellerStyle;
 }
 
 export function createVillage(villageSeed: number, scenario: VillageScenario = {}): VillageState {
@@ -80,6 +88,9 @@ export function createVillage(villageSeed: number, scenario: VillageScenario = {
     villagers,
     villagerNeeds: Object.fromEntries(villagers.map((v) => [v.villagerId, createNeeds()])),
     builtBuildingIds: scenario.builtBuildingIds ?? [],
+    storytellerStyle: scenario.storytellerStyle ?? 'lively',
+    chronicle: [],
+    daysSinceLastHappening: 0,
   };
 }
 
@@ -88,6 +99,7 @@ export interface DayReport {
   date: CalendarDate;
   weather: WeatherDay;
   waiting: readonly string[];
+  happening: HappeningCard | null;
 }
 
 /** Runs one village day's systems in the fixed order and returns the next state. */
@@ -104,6 +116,7 @@ export function runVillageDay(state: VillageState): { state: VillageState; repor
   // works exactly one stint a day.
 
   let ledger = state.ledger;
+  let chronicle = state.chronicle;
   const villagerNeeds: Record<string, Needs> = { ...state.villagerNeeds };
   const waiting: string[] = [];
 
@@ -128,6 +141,14 @@ export function runVillageDay(state: VillageState): { state: VillageState; repor
     ledger = stint.ledger;
     if (stint.waiting) {
       waiting.push(stint.waiting);
+      chronicle = appendChronicle(chronicle, {
+        minute: state.clock.minute,
+        kind: 'work-wait',
+        text: stint.waiting,
+        actors: [villager.villagerId],
+        importance: 1,
+        public: false,
+      });
     }
 
     // needs: eat from stores, or get a relief basket if there's neither food nor coins
@@ -154,7 +175,32 @@ export function runVillageDay(state: VillageState): { state: VillageState; repor
   // economy: nightly upkeep
   ledger = chargeUpkeep(ledger, state.clock.minute, state.builtBuildingIds);
 
-  // social, happenings, chronicle: land in later milestones.
+  // social: lands with a real schedule/relationships system.
+
+  // happenings
+  const happening = pickHappening(HAPPENINGS, {
+    villageSeed: state.villageSeed,
+    day: date.absoluteDay,
+    style: state.storytellerStyle,
+    season: date.season,
+    weather: weather.kind,
+    isMarketDay: date.isMarketDay,
+    builtBuildingIds: state.builtBuildingIds,
+    daysSinceLastHappening: state.daysSinceLastHappening,
+  });
+  const daysSinceLastHappening = happening ? 0 : state.daysSinceLastHappening + 1;
+
+  // chronicle
+  if (happening) {
+    chronicle = appendChronicle(chronicle, {
+      minute: state.clock.minute,
+      kind: 'happening',
+      text: happening.chronicleLine,
+      actors: [],
+      importance: happening.isDamageOrIllness ? 5 : 3,
+      public: true,
+    });
+  }
 
   const nextState: VillageState = {
     ...state,
@@ -162,9 +208,11 @@ export function runVillageDay(state: VillageState): { state: VillageState; repor
     ledger,
     villagerNeeds,
     weatherHistory: [...state.weatherHistory, weather],
+    chronicle,
+    daysSinceLastHappening,
   };
 
-  return { state: nextState, report: { day: date.absoluteDay, date, weather, waiting } };
+  return { state: nextState, report: { day: date.absoluteDay, date, weather, waiting, happening } };
 }
 
 export function runVillageDays(

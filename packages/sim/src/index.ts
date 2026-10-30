@@ -14,4 +14,6 @@ export * from './eating.js';
 export * from './work.js';
 export * from './upkeep.js';
 export * from './prices.js';
+export * from './chronicle.js';
+export * from './storyteller.js';
 export * from './systems.js';
