@@ -16,12 +16,17 @@ describe('happenings table', () => {
     expect(new Set(flagged)).toEqual(new Set(['chimney-fire', 'illness']));
   });
 
-  it('marks the four cards that need unmodeled state as notYetModeled', () => {
+  it('marks the two cards that still need unmodeled state as notYetModeled', () => {
     const notYetModeled = HAPPENINGS.filter((card) => card.condition.kind === 'notYetModeled').map(
       (card) => card.id,
     );
-    expect(new Set(notYetModeled)).toEqual(
-      new Set(['traveller-asks-for-work', 'bumper-harvest', 'quarrel', 'proposal']),
-    );
+    expect(new Set(notYetModeled)).toEqual(new Set(['traveller-asks-for-work', 'bumper-harvest']));
+  });
+
+  it('gives quarrel and proposal real, relationship-based conditions', () => {
+    const quarrel = HAPPENINGS.find((card) => card.id === 'quarrel');
+    const proposal = HAPPENINGS.find((card) => card.id === 'proposal');
+    expect(quarrel?.condition.kind).toBe('anyPairAffinityBelow');
+    expect(proposal?.condition.kind).toBe('anySweetheartForDays');
   });
 });

@@ -12,20 +12,24 @@ import {
   moodFromNeeds,
   type Needs,
 } from './needs.js';
+import { runEveningInteractions, type Relationships } from './relationships.js';
 import { pickHappening, type StorytellerStyle } from './storyteller.js';
 import { chargeUpkeep } from './upkeep.js';
 import { runStint, type WorkerAssignment } from './work.js';
 import { drawWeather, type WeatherDay } from './weather.js';
 
 const HOURS_PER_VILLAGE_DAY = 24;
+/** Spec section 6: "One stint is half a working day." */
+const STINTS_PER_DAY = 2;
 
 /**
  * The fixed order systems run in each village day (spec section 5). Work
- * and economy run one stint per villager per day, nightly upkeep, and
- * eating/relief; happenings and the chronicle now run too. Schedules and
- * social are still named no-ops - a real schedule (two stints a day,
- * evenings, sleep) replaces this day-at-a-time simplification once that
- * system lands.
+ * runs two stints per villager, economy runs nightly upkeep, needs include
+ * eating/relief, social rolls evening interactions, and happenings/the
+ * chronicle run too. A real two-stint schedule (morning/afternoon, tied to
+ * actual clock hours rather than a day-at-a-time loop) still lands with a
+ * full schedules system; this is the stint mechanic without the clock-hour
+ * placement.
  */
 export const SYSTEM_ORDER = [
   'clock',
@@ -51,6 +55,7 @@ export interface VillageState {
   storytellerStyle: StorytellerStyle;
   chronicle: Chronicle;
   daysSinceLastHappening: number;
+  relationships: Relationships;
 }
 
 export interface StartingStock {
@@ -91,6 +96,7 @@ export function createVillage(villageSeed: number, scenario: VillageScenario = {
     storytellerStyle: scenario.storytellerStyle ?? 'lively',
     chronicle: [],
     daysSinceLastHappening: 0,
+    relationships: {},
   };
 }
 
@@ -123,32 +129,37 @@ export function runVillageDay(state: VillageState): { state: VillageState; repor
   for (const villager of state.villagers) {
     const needsBeforeWork = villagerNeeds[villager.villagerId] ?? createNeeds();
 
-    // needs -> mood -> the work system's moodFactor
+    // needs -> mood -> the work system's moodFactor, used for both of today's stints
     const moodFactor = moodFactorFromMood(moodFromNeeds(needsBeforeWork));
 
-    // work
-    const stint = runStint(
-      ledger,
-      { ...villager, moodFactor },
-      {
-        minute: state.clock.minute,
-        day: date.absoluteDay,
-        villageSeed: state.villageSeed,
-        season: date.season,
-        weather: weather.kind,
-      },
-    );
-    ledger = stint.ledger;
-    if (stint.waiting) {
-      waiting.push(stint.waiting);
-      chronicle = appendChronicle(chronicle, {
-        minute: state.clock.minute,
-        kind: 'work-wait',
-        text: stint.waiting,
-        actors: [villager.villagerId],
-        importance: 1,
-        public: false,
-      });
+    // work: two stints a day (spec section 6)
+    let workedAStint = false;
+    for (let stintIndex = 0; stintIndex < STINTS_PER_DAY; stintIndex++) {
+      const stint = runStint(
+        ledger,
+        { ...villager, moodFactor },
+        {
+          minute: state.clock.minute,
+          day: date.absoluteDay,
+          villageSeed: state.villageSeed,
+          season: date.season,
+          weather: weather.kind,
+        },
+      );
+      ledger = stint.ledger;
+      if (stint.waiting) {
+        waiting.push(stint.waiting);
+        chronicle = appendChronicle(chronicle, {
+          minute: state.clock.minute,
+          kind: 'work-wait',
+          text: stint.waiting,
+          actors: [villager.villagerId],
+          importance: 1,
+          public: false,
+        });
+      } else {
+        workedAStint = true;
+      }
     }
 
     // needs: eat from stores, or get a relief basket if there's neither food nor coins
@@ -165,17 +176,24 @@ export function runVillageDay(state: VillageState): { state: VillageState; repor
 
     const decayed = decayNeeds(relief.needs, {
       villageHours: HOURS_PER_VILLAGE_DAY,
-      isWorking: stint.waiting === null,
+      isWorking: workedAStint,
       isAlone: false,
       hasShelter: true,
     });
-    villagerNeeds[villager.villagerId] = applyPurposeForDay(decayed, stint.waiting === null);
+    villagerNeeds[villager.villagerId] = applyPurposeForDay(decayed, workedAStint);
   }
 
   // economy: nightly upkeep
   ledger = chargeUpkeep(ledger, state.clock.minute, state.builtBuildingIds);
 
-  // social: lands with a real schedule/relationships system.
+  // social: an evening interaction for every pair of villagers
+  const villagerIds = state.villagers.map((v) => v.villagerId);
+  const relationships = runEveningInteractions(
+    state.relationships,
+    villagerIds,
+    date.absoluteDay,
+    state.villageSeed,
+  );
 
   // happenings
   const happening = pickHappening(HAPPENINGS, {
@@ -187,6 +205,8 @@ export function runVillageDay(state: VillageState): { state: VillageState; repor
     isMarketDay: date.isMarketDay,
     builtBuildingIds: state.builtBuildingIds,
     daysSinceLastHappening: state.daysSinceLastHappening,
+    villagerIds,
+    relationships,
   });
   const daysSinceLastHappening = happening ? 0 : state.daysSinceLastHappening + 1;
 
@@ -210,6 +230,7 @@ export function runVillageDay(state: VillageState): { state: VillageState; repor
     weatherHistory: [...state.weatherHistory, weather],
     chronicle,
     daysSinceLastHappening,
+    relationships,
   };
 
   return { state: nextState, report: { day: date.absoluteDay, date, weather, waiting, happening } };

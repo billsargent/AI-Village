@@ -6,7 +6,9 @@ export const simpleHappeningConditionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('marketDay') }),
   z.object({ kind: z.literal('buildingExists'), building: z.string() }),
   z.object({ kind: z.literal('weatherIn'), weather: z.array(z.string()) }),
-  /** The card is real (spec section 5) but its condition needs sim state (relationships, streaks, housing) not built yet. Never eligible until a later milestone replaces this. */
+  z.object({ kind: z.literal('anyPairAffinityBelow'), threshold: z.number() }),
+  z.object({ kind: z.literal('anySweetheartForDays'), days: z.number().positive() }),
+  /** The card is real (spec section 5) but its condition needs sim state (housing, weather streaks) not built yet. Never eligible until a later milestone replaces this. */
   z.object({ kind: z.literal('notYetModeled') }),
 ]);
 export type SimpleHappeningCondition = z.infer<typeof simpleHappeningConditionSchema>;
@@ -105,7 +107,7 @@ export const HAPPENINGS = [
   {
     id: 'quarrel',
     title: 'Quarrel',
-    condition: { kind: 'notYetModeled' },
+    condition: { kind: 'anyPairAffinityBelow', threshold: -40 },
     weight: 2,
     effect: 'Both moods dip; a chance to make up',
     chronicleLine: 'Two villagers had a falling-out on the green.',
@@ -115,7 +117,7 @@ export const HAPPENINGS = [
   {
     id: 'proposal',
     title: 'Proposal',
-    condition: { kind: 'notYetModeled' },
+    condition: { kind: 'anySweetheartForDays', days: 14 },
     weight: 1,
     effect: 'A wedding at the chapel the next Restday',
     chronicleLine: 'A proposal on the green - a wedding is coming.',

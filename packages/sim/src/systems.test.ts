@@ -32,11 +32,11 @@ describe('runVillageDay', () => {
     const { state, report } = runVillageDay(village);
     expect(report.waiting).toEqual([]);
     expect(getBalance(state.ledger, 'village', 'wheat')).toBeGreaterThan(0);
-    // 20 starting - 3 wage - 2 upkeep = 15
-    expect(getBalance(state.ledger, 'treasury', 'coins')).toBe(15);
+    // 20 starting - 2 stints x 3 wage - 2 upkeep = 12
+    expect(getBalance(state.ledger, 'treasury', 'coins')).toBe(12);
   });
 
-  it('reports why a villager is waiting, without stopping the day', () => {
+  it('reports why a villager is waiting, without stopping the day, once per stint', () => {
     const village = createVillage(1, {
       villagers: [
         { villagerId: 'tobin', tradeId: 'baker', skillLevel: 1, hasTool: false, moodFactor: 1 },
@@ -44,7 +44,10 @@ describe('runVillageDay', () => {
       startingStock: [{ account: 'treasury', item: 'coins', qty: 20 }],
     });
     const { report } = runVillageDay(village);
-    expect(report.waiting).toEqual(['No flour: the bakery needs flour']);
+    expect(report.waiting).toEqual([
+      'No flour: the bakery needs flour',
+      'No flour: the bakery needs flour',
+    ]);
   });
 
   it('logs a chronicle entry for a wait, and for a happening when one fires', () => {

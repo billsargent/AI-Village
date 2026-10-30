@@ -5,6 +5,7 @@ import type {
 } from '@ai-village/content';
 import type { Season } from './calendar.js';
 import { seededRandom, weightedPick } from './random.js';
+import { anyPairBelowAffinity, anySweetheartFor, type Relationships } from './relationships.js';
 import type { WeatherKind } from './weather.js';
 
 /** Gentle excludes damage/illness cards (spec section 5); Eventful fires more often than Lively, the default. */
@@ -31,6 +32,8 @@ export interface StorytellerContext {
   builtBuildingIds: readonly string[];
   /** Village days since a happening last fired. */
   daysSinceLastHappening: number;
+  villagerIds: readonly string[];
+  relationships: Relationships;
 }
 
 function simpleConditionHolds(
@@ -50,6 +53,15 @@ function simpleConditionHolds(
       return condition.weather.includes(context.weather);
     case 'buildingExists':
       return context.builtBuildingIds.includes(condition.building);
+    case 'anyPairAffinityBelow':
+      return anyPairBelowAffinity(context.relationships, context.villagerIds, condition.threshold);
+    case 'anySweetheartForDays':
+      return anySweetheartFor(
+        context.relationships,
+        context.villagerIds,
+        context.day,
+        condition.days,
+      );
   }
 }
 
