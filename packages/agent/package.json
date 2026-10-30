@@ -11,9 +11,10 @@
   },
   "dependencies": {
     "@ai-village/content": "workspace:*",
-    "@ai-village/sim": "workspace:*",
     "@ai-village/db": "workspace:*",
     "@ai-village/integrations": "workspace:*",
-    "zod": "^3.24.1"
+    "@ai-village/sim": "workspace:*",
+    "zod": "^3.24.1",
+    "zod-to-json-schema": "^3.25.2"
   }
 }
