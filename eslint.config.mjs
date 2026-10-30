@@ -7,12 +7,19 @@ import globals from 'globals';
 export default [
   js.configs.recommended,
   {
-    files: ['packages/**/*.ts', 'packages/**/*.tsx', 'apps/**/*.ts', 'apps/**/*.tsx'],
+    files: [
+      'packages/**/*.ts',
+      'packages/**/*.tsx',
+      'apps/**/*.ts',
+      'apps/**/*.tsx',
+      'tools/**/*.ts',
+    ],
     languageOptions: {
       parser: tsparser,
       parserOptions: {
         projectService: true,
       },
+      globals: { ...globals.node },
     },
     plugins: {
       '@typescript-eslint': tseslint,
@@ -20,6 +27,7 @@ export default [
     rules: {
       ...tseslint.configs['strict-type-checked']?.rules,
       '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
     },
   },
   {
