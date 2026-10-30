@@ -7,6 +7,7 @@
     { "path": "packages/agent" },
     { "path": "packages/integrations" },
     { "path": "apps/server" },
-    { "path": "apps/web" }
+    { "path": "apps/web" },
+    { "path": "tools" }
   ]
 }

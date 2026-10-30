@@ -1,0 +1,17 @@
+{
+  "name": "@ai-village/tools",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -b",
+    "sim": "tsx sim-run.ts"
+  },
+  "dependencies": {
+    "@ai-village/content": "workspace:*",
+    "@ai-village/sim": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
+  }
+}
