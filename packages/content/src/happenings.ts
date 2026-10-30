@@ -8,13 +8,15 @@ export const simpleHappeningConditionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('weatherIn'), weather: z.array(z.string()) }),
   z.object({ kind: z.literal('anyPairAffinityBelow'), threshold: z.number() }),
   z.object({ kind: z.literal('anySweetheartForDays'), days: z.number().positive() }),
+  /** True when the village has at least one cottage bed free (fewer villagers than built cottages, one bed per cottage). */
+  z.object({ kind: z.literal('freeBedAvailable') }),
   /** True once the last `days` days (today included) were all one of `weather`. */
   z.object({
     kind: z.literal('weatherStreak'),
     weather: z.array(z.string()),
     days: z.number().positive(),
   }),
-  /** The card is real (spec section 5) but its condition needs sim state (housing) not built yet. Never eligible until a later milestone replaces this. */
+  /** For a card whose condition needs sim state not built yet. Never eligible until a later milestone replaces this. */
   z.object({ kind: z.literal('notYetModeled') }),
 ]);
 export type SimpleHappeningCondition = z.infer<typeof simpleHappeningConditionSchema>;
@@ -57,7 +59,7 @@ export const HAPPENINGS = [
   {
     id: 'traveller-asks-for-work',
     title: 'A traveller asks for work',
-    condition: { kind: 'notYetModeled' },
+    condition: { kind: 'freeBedAvailable' },
     weight: 2,
     effect: 'A hire proposal for the Mayor',
     chronicleLine: 'A traveller at the gate asked the Mayor for work.',

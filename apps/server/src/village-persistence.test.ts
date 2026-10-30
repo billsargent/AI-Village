@@ -41,7 +41,7 @@ describe('village persistence round trip', () => {
         { villagerId: 'ada', tradeId: 'farmer', skillLevel: 2, hasTool: true, moodFactor: 1 },
         { villagerId: 'wren', tradeId: 'innkeeper', skillLevel: 1, hasTool: false, moodFactor: 1 },
       ],
-      builtBuildingIds: ['town-hall', 'inn', 'fields'],
+      builtBuildingIds: ['town-hall', 'inn', 'fields', 'fields'],
       startingStock: [{ account: 'treasury', item: 'coins', qty: 2000 }],
     });
 

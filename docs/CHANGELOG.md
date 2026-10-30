@@ -36,3 +36,7 @@
 - A `weatherStreak` happening condition, unlocking "bumper harvest", plus
   real mechanical effects (not just a chronicle line) for bumper harvest
   and visiting bard (#80).
+- Multi-instance buildings (fields, cottages), a `freeBedAvailable`
+  happening condition unlocking "a traveller asks for work", and a DB
+  migration so more than one instance of a building can be persisted
+  (#82).

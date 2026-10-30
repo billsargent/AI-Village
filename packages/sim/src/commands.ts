@@ -93,7 +93,7 @@ function applyProposeBuilding(state: VillageState, command: { buildingId: string
   if (!building) {
     throw new CommandError(`Unknown building "${command.buildingId}"`);
   }
-  if (state.builtBuildingIds.includes(building.id)) {
+  if (!building.multiInstance && state.builtBuildingIds.includes(building.id)) {
     throw new CommandError(`"${building.id}" is already built`);
   }
   if (
