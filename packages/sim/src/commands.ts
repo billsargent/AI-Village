@@ -6,14 +6,15 @@
  * is sim's job, the same as the rest of the economy, and both the agent
  * and a future owner UI call the same `apply()`.
  *
- * Of the five commands spec section 2 names, three have a mechanic now
+ * Of the five commands spec section 2 names, four have a mechanic now
  * buildable from what the sim has (`GiveGift`, `ProposeBuilding`,
- * `AcceptOrder`/`DeclineOrder`); `PostOnBoard` and `CallVote` still wait
- * on sim features that don't exist yet (the board, villager roles) -
- * see issues #70-#71.
+ * `AcceptOrder`/`DeclineOrder`, `PostOnBoard`); `CallVote` still waits
+ * on a sim feature that doesn't exist yet (villager roles) - see issue
+ * #71.
  */
 
 import { getBuilding, getGood } from '@ai-village/content';
+import { postToBoard } from './board.js';
 import { calendarDateFromMinute } from './calendar.js';
 import { appendChronicle } from './chronicle.js';
 import { MARKET_ACCOUNT, recordMovement } from './ledger.js';
@@ -25,13 +26,15 @@ export type Command =
   | { kind: 'GiveGift'; from: string; to: string; item: string; qty: number }
   | { kind: 'ProposeBuilding'; buildingId: string }
   | { kind: 'AcceptOrder'; orderId: number }
-  | { kind: 'DeclineOrder'; orderId: number };
+  | { kind: 'DeclineOrder'; orderId: number }
+  | { kind: 'PostOnBoard'; author: string; text: string };
 
 export type DomainEvent =
   | { kind: 'GiftGiven'; from: string; to: string; item: string; qty: number }
   | { kind: 'BuildingFinished'; buildingId: string }
   | { kind: 'OrderAccepted'; orderId: number }
-  | { kind: 'OrderDeclined'; orderId: number };
+  | { kind: 'OrderDeclined'; orderId: number }
+  | { kind: 'PostedOnBoard'; postId: number };
 
 export interface CommandResult {
   state: VillageState;
@@ -51,6 +54,8 @@ export function apply(state: VillageState, command: Command): CommandResult {
       return applyOrderDecision(state, command.orderId, 'accepted');
     case 'DeclineOrder':
       return applyOrderDecision(state, command.orderId, 'declined');
+    case 'PostOnBoard':
+      return applyPostOnBoard(state, command);
   }
 }
 
@@ -201,5 +206,36 @@ function applyOrderDecision(
         ? { kind: 'OrderAccepted', orderId }
         : { kind: 'OrderDeclined', orderId },
     ],
+  };
+}
+
+function applyPostOnBoard(
+  state: VillageState,
+  command: { author: string; text: string },
+): CommandResult {
+  const { author, text } = command;
+  if (!state.villagers.some((villager) => villager.villagerId === author)) {
+    throw new CommandError(`Unknown villager "${author}"`);
+  }
+  if (text.trim().length === 0) {
+    throw new CommandError('A board post cannot be empty');
+  }
+
+  const day = calendarDateFromMinute(state.clock.minute).absoluteDay;
+  const postId = state.board.nextId;
+  const board = postToBoard(state.board, author, text, day);
+
+  const chronicle = appendChronicle(state.chronicle, {
+    minute: state.clock.minute,
+    kind: 'board-post',
+    text: `${author} posted on the board: "${text}"`,
+    actors: [author],
+    importance: 1,
+    public: true,
+  });
+
+  return {
+    state: { ...state, board, chronicle },
+    events: [{ kind: 'PostedOnBoard', postId }],
   };
 }

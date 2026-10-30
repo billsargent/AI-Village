@@ -4,6 +4,7 @@ import {
   ACCEPT_ORDER_TOOL,
   DECLINE_ORDER_TOOL,
   GIFT_TOOL,
+  POST_ON_BOARD_TOOL,
   PROPOSE_BUILDING_TOOL,
   SIM_TOOLS,
 } from './sim-tools.js';
@@ -120,10 +121,36 @@ describe('DECLINE_ORDER_TOOL', () => {
   });
 });
 
+describe('POST_ON_BOARD_TOOL', () => {
+  it('runs the PostOnBoard command against the sim state', () => {
+    const village = createVillage(1, {
+      villagers: [
+        { villagerId: 'ada', tradeId: 'farmer', skillLevel: 1, hasTool: false, moodFactor: 1 },
+      ],
+    });
+    const args = POST_ON_BOARD_TOOL.args.parse({ author: 'ada', text: 'Hello.' });
+    const result = POST_ON_BOARD_TOOL.run?.(args, { state: village }) as {
+      state: typeof village;
+      events: unknown[];
+    };
+
+    expect(result.state.board.posts).toMatchObject([{ author: 'ada', text: 'Hello.' }]);
+    expect(result.events).toEqual([{ kind: 'PostedOnBoard', postId: 1 }]);
+  });
+
+  it('is a risk-none game action granted to the Villager role', () => {
+    expect(POST_ON_BOARD_TOOL.kind).toBe('game');
+    expect(POST_ON_BOARD_TOOL.risk).toBe('none');
+    const registry = new ToolRegistry();
+    registry.register(POST_ON_BOARD_TOOL);
+    expect(resolveVillagerTools(registry, 'villager', [])).toEqual(['post_on_board']);
+  });
+});
+
 describe('SIM_TOOLS', () => {
   it('contains every sim tool with unique ids', () => {
     expect(new Set(SIM_TOOLS.map((tool) => tool.id))).toEqual(
-      new Set(['gift', 'propose_building', 'accept_order', 'decline_order']),
+      new Set(['gift', 'propose_building', 'accept_order', 'decline_order', 'post_on_board']),
     );
   });
 });

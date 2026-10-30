@@ -8,6 +8,7 @@ import {
   runVillageDay,
   runVillageDays,
   SYSTEM_ORDER,
+  type VillageState,
 } from './systems.js';
 
 function happeningCard(id: string): HappeningCard {
@@ -171,5 +172,20 @@ describe('runVillageDays', () => {
 
     expect(state.orders.orders.length).toBeGreaterThan(0);
     expect(state.chronicle.some((entry) => entry.kind === 'order-posted')).toBe(true);
+  });
+
+  it('archives a board post once it is past its retention window', () => {
+    const village = createVillage(1);
+    const withPost: VillageState = {
+      ...village,
+      board: { posts: [{ id: 1, author: 'ada', text: 'Hello.', postedDay: 0 }], nextId: 2 },
+    };
+
+    let state = withPost;
+    for (let i = 0; i < 15; i++) {
+      state = runVillageDay(state).state;
+    }
+
+    expect(state.board.posts).toEqual([]);
   });
 });

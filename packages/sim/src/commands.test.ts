@@ -178,3 +178,38 @@ describe('apply AcceptOrder / DeclineOrder', () => {
     expect(() => apply(village, { kind: 'DeclineOrder', orderId: 1 })).toThrow(CommandError);
   });
 });
+
+describe('apply PostOnBoard', () => {
+  it('appends a post to the board', () => {
+    const village = villageWithTwo();
+    const { state, events } = apply(village, {
+      kind: 'PostOnBoard',
+      author: 'ada',
+      text: 'Meeting Starday at noon.',
+    });
+    expect(state.board.posts).toEqual([
+      { id: 1, author: 'ada', text: 'Meeting Starday at noon.', postedDay: 0 },
+    ]);
+    expect(events).toEqual([{ kind: 'PostedOnBoard', postId: 1 }]);
+  });
+
+  it('appends a public chronicle entry', () => {
+    const village = villageWithTwo();
+    const { state } = apply(village, { kind: 'PostOnBoard', author: 'ada', text: 'Hello.' });
+    expect(state.chronicle.at(-1)).toMatchObject({ kind: 'board-post', public: true });
+  });
+
+  it('rejects an unknown villager', () => {
+    const village = villageWithTwo();
+    expect(() => apply(village, { kind: 'PostOnBoard', author: 'nobody', text: 'Hello.' })).toThrow(
+      CommandError,
+    );
+  });
+
+  it('rejects an empty post', () => {
+    const village = villageWithTwo();
+    expect(() => apply(village, { kind: 'PostOnBoard', author: 'ada', text: '   ' })).toThrow(
+      CommandError,
+    );
+  });
+});

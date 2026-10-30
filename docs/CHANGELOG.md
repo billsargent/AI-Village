@@ -44,3 +44,6 @@
   order, automatic delivery with a late-order half-reward penalty), the
   `AcceptOrder`/`DeclineOrder` commands, their tool-registry wiring, and
   DB persistence for orders (#84).
+- A minimal village notice board (posts archived after 14 days), the
+  `PostOnBoard` command, its tool-registry wiring, and DB persistence
+  (#86).

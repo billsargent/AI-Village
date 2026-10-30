@@ -91,6 +91,7 @@ const SAMPLE_SNAPSHOT: VillageSnapshot = {
       status: 'accepted',
     },
   ],
+  board: [{ id: 1, author: 'ada', text: 'Lost a basket near the mill.', postedDay: 3 }],
 };
 
 describe('saveVillage / loadVillage', () => {

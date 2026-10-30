@@ -1,4 +1,5 @@
 import { HAPPENINGS, type HappeningCard } from '@ai-village/content';
+import { archiveOldBoardPosts, createBoard, type BoardState } from './board.js';
 import { calendarDateFromMinute, MINUTES_PER_DAY, type CalendarDate } from './calendar.js';
 import { appendChronicle, type Chronicle } from './chronicle.js';
 import { createClock, type ClockState } from './clock.js';
@@ -70,6 +71,7 @@ export interface VillageState {
   daysSinceLastHappening: number;
   relationships: Relationships;
   orders: OrdersState;
+  board: BoardState;
 }
 
 export interface StartingStock {
@@ -112,6 +114,7 @@ export function createVillage(villageSeed: number, scenario: VillageScenario = {
     daysSinceLastHappening: 0,
     relationships: {},
     orders: createOrders(),
+    board: createBoard(),
   };
 }
 
@@ -280,6 +283,9 @@ export function runVillageDay(state: VillageState): { state: VillageState; repor
     }
   }
 
+  // the board: archive any post past its retention window
+  const board = archiveOldBoardPosts(state.board, date.absoluteDay);
+
   // social: an evening interaction for every pair of villagers
   const villagerIds = state.villagers.map((v) => v.villagerId);
   const relationships = runEveningInteractions(
@@ -330,6 +336,7 @@ export function runVillageDay(state: VillageState): { state: VillageState; repor
     daysSinceLastHappening,
     relationships,
     orders,
+    board,
   };
 
   return { state: nextState, report: { day: date.absoluteDay, date, weather, waiting, happening } };
