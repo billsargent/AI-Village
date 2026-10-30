@@ -19,3 +19,7 @@
   (run a village, save it, reload it, confirm it matches) (#54).
 - The agent layer's facts(), tool registry, and risk/approval decisions -
   the parts of the agent that need no model provider or keys (#60).
+- A DeepSeek model client, purpose-based model routing, the meter, and a
+  minimal `runChat` runner tying facts/models/meter/client together - fully
+  testable against scripted fakes, with no real API key or network call yet
+  (#67).
