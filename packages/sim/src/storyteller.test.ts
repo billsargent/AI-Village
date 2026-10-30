@@ -1,6 +1,7 @@
 import type { HappeningCard } from '@ai-village/content';
 import { describe, expect, it } from 'vitest';
 import { pickHappening, type StorytellerContext } from './storyteller.js';
+import type { WeatherKind } from './weather.js';
 
 const BASE_CONTEXT: StorytellerContext = {
   villageSeed: 1,
@@ -13,6 +14,7 @@ const BASE_CONTEXT: StorytellerContext = {
   daysSinceLastHappening: 0,
   villagerIds: [],
   relationships: {},
+  weatherHistory: ['clear'],
 };
 
 function card(overrides: Partial<HappeningCard>): HappeningCard {
@@ -116,5 +118,30 @@ describe('pickHappening', () => {
       pickHappening([proposalCard], { ...longEnough, day: day + 14 }),
     );
     expect(fires.some((result) => result?.id === 'proposal')).toBe(true);
+  });
+
+  it('fires the weatherStreak-style card only once the most recent days are all a matching kind', () => {
+    const streakCard = card({
+      id: 'streak',
+      condition: { kind: 'weatherStreak', weather: ['clear'], days: 3 },
+    });
+    const tooShort = { ...BASE_CONTEXT, weatherHistory: ['clear', 'clear'] as WeatherKind[] };
+    const brokenStreak = {
+      ...BASE_CONTEXT,
+      weatherHistory: ['clear', 'rain', 'clear'] as WeatherKind[],
+    };
+    const longEnough = {
+      ...BASE_CONTEXT,
+      weatherHistory: ['rain', 'clear', 'clear', 'clear'] as WeatherKind[],
+    };
+
+    for (let day = 0; day < 30; day++) {
+      expect(pickHappening([streakCard], { ...tooShort, day })).toBeNull();
+      expect(pickHappening([streakCard], { ...brokenStreak, day })).toBeNull();
+    }
+    const fires = Array.from({ length: 30 }, (_, day) =>
+      pickHappening([streakCard], { ...longEnough, day }),
+    );
+    expect(fires.some((result) => result?.id === 'streak')).toBe(true);
   });
 });

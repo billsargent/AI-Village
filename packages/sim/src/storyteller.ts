@@ -34,6 +34,20 @@ export interface StorytellerContext {
   daysSinceLastHappening: number;
   villagerIds: readonly string[];
   relationships: Relationships;
+  /** Weather so far, oldest first, today included - for `weatherStreak` conditions. */
+  weatherHistory: readonly WeatherKind[];
+}
+
+/** True once the most recent `days` entries (today included) are all one of `weather`. */
+function hasWeatherStreak(
+  history: readonly WeatherKind[],
+  weather: readonly string[],
+  days: number,
+): boolean {
+  if (history.length < days) {
+    return false;
+  }
+  return history.slice(-days).every((kind) => weather.includes(kind));
 }
 
 function simpleConditionHolds(
@@ -62,6 +76,8 @@ function simpleConditionHolds(
         context.day,
         condition.days,
       );
+    case 'weatherStreak':
+      return hasWeatherStreak(context.weatherHistory, condition.weather, condition.days);
   }
 }
 

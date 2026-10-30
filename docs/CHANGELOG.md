@@ -33,3 +33,6 @@
 - `runTurn`: the chat turn loop, calling the model with a villager's tools,
   running approved calls through the registry and `apply()`, feeding
   results back, and repeating up to the chat purpose's maxSteps (#78).
+- A `weatherStreak` happening condition, unlocking "bumper harvest", plus
+  real mechanical effects (not just a chronicle line) for bumper harvest
+  and visiting bard (#80).

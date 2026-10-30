@@ -16,11 +16,11 @@ describe('happenings table', () => {
     expect(new Set(flagged)).toEqual(new Set(['chimney-fire', 'illness']));
   });
 
-  it('marks the two cards that still need unmodeled state as notYetModeled', () => {
+  it('marks the one card that still needs unmodeled state as notYetModeled', () => {
     const notYetModeled = HAPPENINGS.filter((card) => card.condition.kind === 'notYetModeled').map(
       (card) => card.id,
     );
-    expect(new Set(notYetModeled)).toEqual(new Set(['traveller-asks-for-work', 'bumper-harvest']));
+    expect(new Set(notYetModeled)).toEqual(new Set(['traveller-asks-for-work']));
   });
 
   it('gives quarrel and proposal real, relationship-based conditions', () => {
@@ -28,5 +28,16 @@ describe('happenings table', () => {
     const proposal = HAPPENINGS.find((card) => card.id === 'proposal');
     expect(quarrel?.condition.kind).toBe('anyPairAffinityBelow');
     expect(proposal?.condition.kind).toBe('anySweetheartForDays');
+  });
+
+  it('gives bumper harvest an autumn-plus-weather-streak condition', () => {
+    const bumperHarvest = HAPPENINGS.find((card) => card.id === 'bumper-harvest');
+    expect(bumperHarvest?.condition).toEqual({
+      kind: 'all',
+      of: [
+        { kind: 'season', seasons: ['autumn'] },
+        { kind: 'weatherStreak', weather: ['clear'], days: 5 },
+      ],
+    });
   });
 });

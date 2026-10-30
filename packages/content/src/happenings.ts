@@ -8,7 +8,13 @@ export const simpleHappeningConditionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('weatherIn'), weather: z.array(z.string()) }),
   z.object({ kind: z.literal('anyPairAffinityBelow'), threshold: z.number() }),
   z.object({ kind: z.literal('anySweetheartForDays'), days: z.number().positive() }),
-  /** The card is real (spec section 5) but its condition needs sim state (housing, weather streaks) not built yet. Never eligible until a later milestone replaces this. */
+  /** True once the last `days` days (today included) were all one of `weather`. */
+  z.object({
+    kind: z.literal('weatherStreak'),
+    weather: z.array(z.string()),
+    days: z.number().positive(),
+  }),
+  /** The card is real (spec section 5) but its condition needs sim state (housing) not built yet. Never eligible until a later milestone replaces this. */
   z.object({ kind: z.literal('notYetModeled') }),
 ]);
 export type SimpleHappeningCondition = z.infer<typeof simpleHappeningConditionSchema>;
@@ -87,7 +93,13 @@ export const HAPPENINGS = [
   {
     id: 'bumper-harvest',
     title: 'Bumper harvest',
-    condition: { kind: 'notYetModeled' },
+    condition: {
+      kind: 'all',
+      of: [
+        { kind: 'season', seasons: ['autumn'] },
+        { kind: 'weatherStreak', weather: ['clear'], days: 5 },
+      ],
+    },
     weight: 2,
     effect: 'Wheat +50%; a surplus to sell',
     chronicleLine: 'A bumper harvest filled the farmhouse to the rafters.',
