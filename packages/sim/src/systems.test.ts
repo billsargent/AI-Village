@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { runVillageDay, runVillageDays, SYSTEM_ORDER } from './systems.js';
+import { getBalance } from './ledger.js';
+import { createVillage, runVillageDay, runVillageDays, SYSTEM_ORDER } from './systems.js';
 
 describe('SYSTEM_ORDER', () => {
   it('runs clock before weather before everything else, chronicle last', () => {
@@ -11,23 +12,39 @@ describe('SYSTEM_ORDER', () => {
 
 describe('runVillageDay', () => {
   it('advances the clock by exactly one day', () => {
-    const { state } = runVillageDay({
-      villageSeed: 1,
-      clock: { minute: 0, speed: 1, paused: false },
-      ledger: { entries: [], balances: {}, nextId: 1 },
-      weatherHistory: [],
-    });
+    const { state } = runVillageDay(createVillage(1));
     expect(state.clock.minute).toBe(24 * 60);
   });
 
   it('records one weather day per village day', () => {
-    const { state } = runVillageDay({
-      villageSeed: 1,
-      clock: { minute: 0, speed: 1, paused: false },
-      ledger: { entries: [], balances: {}, nextId: 1 },
-      weatherHistory: [],
-    });
+    const { state } = runVillageDay(createVillage(1));
     expect(state.weatherHistory).toHaveLength(1);
+  });
+
+  it("runs each villager's stint and charges upkeep for each built building", () => {
+    const village = createVillage(1, {
+      villagers: [
+        { villagerId: 'ada', tradeId: 'farmer', skillLevel: 1, hasTool: false, moodFactor: 1 },
+      ],
+      builtBuildingIds: ['town-hall', 'fields'],
+      startingStock: [{ account: 'treasury', item: 'coins', qty: 20 }],
+    });
+    const { state, report } = runVillageDay(village);
+    expect(report.waiting).toEqual([]);
+    expect(getBalance(state.ledger, 'village', 'wheat')).toBeGreaterThan(0);
+    // 20 starting - 3 wage - 2 upkeep = 15
+    expect(getBalance(state.ledger, 'treasury', 'coins')).toBe(15);
+  });
+
+  it('reports why a villager is waiting, without stopping the day', () => {
+    const village = createVillage(1, {
+      villagers: [
+        { villagerId: 'tobin', tradeId: 'baker', skillLevel: 1, hasTool: false, moodFactor: 1 },
+      ],
+      startingStock: [{ account: 'treasury', item: 'coins', qty: 20 }],
+    });
+    const { report } = runVillageDay(village);
+    expect(report.waiting).toEqual(['No flour: the bakery needs flour']);
   });
 });
 
