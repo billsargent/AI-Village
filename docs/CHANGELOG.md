@@ -27,3 +27,6 @@
   of the sim-agent interface (#68).
 - The tool registry's first two real tools, `gift` and `propose_building`,
   wired to run against the sim via `apply()` (#73).
+- The DeepSeek client's tool-calling support: `tools` in the request,
+  `tool_calls` in the response, and the assistant/tool-reply message
+  shapes a real tool-calling turn needs (#76).
