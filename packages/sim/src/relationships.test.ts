@@ -3,6 +3,7 @@ import {
   anyPairBelowAffinity,
   anySweetheartFor,
   applyEveningInteraction,
+  applyGift,
   getRelationship,
   labelFor,
   pairKey,
@@ -71,6 +72,29 @@ describe('applyEveningInteraction', () => {
       }
     }
     expect(becameSweetheartsOnDay).not.toBeNull();
+  });
+});
+
+describe('applyGift', () => {
+  it('raises affinity within the gift range and raises familiarity', () => {
+    const relationships = applyGift({}, 'ada', 'tobin', 1, 1);
+    const relationship = getRelationship(relationships, 'ada', 'tobin');
+    expect(relationship.affinity).toBeGreaterThanOrEqual(5);
+    expect(relationship.affinity).toBeLessThanOrEqual(15);
+    expect(relationship.familiarity).toBe(2);
+  });
+
+  it('is deterministic for a given seed and day', () => {
+    const a = applyGift({}, 'ada', 'tobin', 3, 7);
+    const b = applyGift({}, 'ada', 'tobin', 3, 7);
+    expect(a).toEqual(b);
+  });
+
+  it('does not perturb the evening-interaction roll for the same pair/day/seed', () => {
+    const before = applyEveningInteraction({}, 'ada', 'tobin', 3, 7);
+    applyGift({}, 'ada', 'tobin', 3, 7);
+    const after = applyEveningInteraction({}, 'ada', 'tobin', 3, 7);
+    expect(after).toEqual(before);
   });
 });
 

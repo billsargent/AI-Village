@@ -87,25 +87,16 @@ function rollInteractionKind(relationship: Relationship, rng: () => number): Int
   return weightedPick(['chat', 'sharedWork', 'gift', 'quarrel'], [60, 20, 10, 10], rng);
 }
 
-/**
- * Applies one interaction to a pair's relationship, picked by a seeded
- * roll (spec section 7: chats +1-3, shared work +1, gifts +5-15, quarrels
- * -10, making up +8 - familiarity rises with any interaction).
- */
-export function applyEveningInteraction(
+/** Applies an already-rolled affinity change to a pair, with familiarity's flat nightly gain and the sweetheart check shared by every interaction kind. */
+function applyAffinityDelta(
   relationships: Relationships,
   a: string,
   b: string,
   day: number,
-  villageSeed: number,
+  affinityDelta: number,
 ): Relationships {
   const key = pairKey(a, b);
   const current = relationships[key] ?? EMPTY_RELATIONSHIP;
-  const rng = seededRandom({ villageSeed, day, system: 'relationships', entity: key });
-
-  const kind = rollInteractionKind(current, rng);
-  const [min, max] = AFFINITY_DELTA[kind];
-  const affinityDelta = min === max ? min : min + rng() * (max - min);
 
   const affinity = clamp(current.affinity + affinityDelta, MIN_AFFINITY, MAX_AFFINITY);
   const familiarity = clamp(
@@ -126,6 +117,50 @@ export function applyEveningInteraction(
       sweetheartSinceDay: becomingSweethearts ? day : current.sweetheartSinceDay,
     },
   };
+}
+
+/**
+ * Applies one interaction to a pair's relationship, picked by a seeded
+ * roll (spec section 7: chats +1-3, shared work +1, gifts +5-15, quarrels
+ * -10, making up +8 - familiarity rises with any interaction).
+ */
+export function applyEveningInteraction(
+  relationships: Relationships,
+  a: string,
+  b: string,
+  day: number,
+  villageSeed: number,
+): Relationships {
+  const key = pairKey(a, b);
+  const current = relationships[key] ?? EMPTY_RELATIONSHIP;
+  const rng = seededRandom({ villageSeed, day, system: 'relationships', entity: key });
+
+  const kind = rollInteractionKind(current, rng);
+  const [min, max] = AFFINITY_DELTA[kind];
+  const affinityDelta = min === max ? min : min + rng() * (max - min);
+
+  return applyAffinityDelta(relationships, a, b, day, affinityDelta);
+}
+
+/**
+ * Applies an explicit gift from `from` to `to` (spec section 7's gift
+ * range, +5 to +15) for the `GiveGift` command - distinct from the random
+ * evening-interaction roll above, so it uses its own seeded stream and
+ * never perturbs that one's sequence.
+ */
+export function applyGift(
+  relationships: Relationships,
+  from: string,
+  to: string,
+  day: number,
+  villageSeed: number,
+): Relationships {
+  const key = pairKey(from, to);
+  const rng = seededRandom({ villageSeed, day, system: 'gift-command', entity: key });
+  const [min, max] = AFFINITY_DELTA.gift;
+  const affinityDelta = min + rng() * (max - min);
+
+  return applyAffinityDelta(relationships, from, to, day, affinityDelta);
 }
 
 /** Rolls one evening interaction for every unordered pair of villagers. */

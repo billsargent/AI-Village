@@ -23,3 +23,5 @@
   minimal `runChat` runner tying facts/models/meter/client together - fully
   testable against scripted fakes, with no real API key or network call yet
   (#67).
+- `apply(command)`: `GiveGift` and `ProposeBuilding`, the sim's write side
+  of the sim-agent interface (#68).
