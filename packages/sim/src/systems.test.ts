@@ -46,6 +46,26 @@ describe('runVillageDay', () => {
     const { report } = runVillageDay(village);
     expect(report.waiting).toEqual(['No flour: the bakery needs flour']);
   });
+
+  it('logs a chronicle entry for a wait, and for a happening when one fires', () => {
+    const village = createVillage(1, {
+      villagers: [
+        { villagerId: 'tobin', tradeId: 'baker', skillLevel: 1, hasTool: false, moodFactor: 1 },
+      ],
+      startingStock: [{ account: 'treasury', item: 'coins', qty: 20 }],
+    });
+    const { state, report } = runVillageDay(village);
+    expect(state.chronicle.some((entry) => entry.kind === 'work-wait')).toBe(true);
+    if (report.happening) {
+      expect(state.chronicle.some((entry) => entry.kind === 'happening')).toBe(true);
+    }
+  });
+
+  it('resets the days-since-happening counter only when one fires', () => {
+    const village = createVillage(1, { storytellerStyle: 'eventful' });
+    const { state, report } = runVillageDay(village);
+    expect(state.daysSinceLastHappening).toBe(report.happening ? 0 : 1);
+  });
 });
 
 describe('runVillageDays', () => {
