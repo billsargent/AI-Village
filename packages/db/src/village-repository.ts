@@ -84,6 +84,13 @@ export interface OrderRow {
   status: string;
 }
 
+export interface BoardPostRow {
+  id: number;
+  author: string;
+  text: string;
+  postedDay: number;
+}
+
 export interface VillageSnapshot {
   clock: ClockRow;
   builtBuildingIds: readonly string[];
@@ -95,6 +102,7 @@ export interface VillageSnapshot {
   weatherDays: readonly WeatherDayRow[];
   chronicle: readonly ChronicleEntryRow[];
   orders: readonly OrderRow[];
+  board: readonly BoardPostRow[];
 }
 
 const CLOCK_ROW_ID = 1;
@@ -157,6 +165,11 @@ export async function saveVillage(db: Database, snapshot: VillageSnapshot): Prom
         .insert(schema.orders)
         .values(snapshot.orders.map((order) => ({ ...order, items: JSON.stringify(order.items) })));
     }
+
+    await tx.delete(schema.board);
+    if (snapshot.board.length > 0) {
+      await tx.insert(schema.board).values([...snapshot.board]);
+    }
   });
 }
 
@@ -180,6 +193,7 @@ export async function loadVillage(db: Database): Promise<VillageSnapshot | null>
   const weatherRows = await db.select().from(schema.weatherDays).all();
   const chronicleRows = await db.select().from(schema.chronicle).all();
   const orderRows = await db.select().from(schema.orders).all();
+  const boardRows = await db.select().from(schema.board).all();
 
   return {
     clock: {
@@ -221,5 +235,6 @@ export async function loadVillage(db: Database): Promise<VillageSnapshot | null>
       dueDay: row.dueDay,
       status: row.status,
     })),
+    board: boardRows,
   };
 }

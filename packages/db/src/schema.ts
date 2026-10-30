@@ -91,6 +91,13 @@ export const orders = sqliteTable('orders', {
   status: text('status').notNull(),
 });
 
+export const board = sqliteTable('board', {
+  id: integer('id').primaryKey(),
+  author: text('author').notNull(),
+  text: text('text').notNull(),
+  postedDay: integer('posted_day').notNull(),
+});
+
 export const chronicle = sqliteTable('chronicle', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   minute: real('minute').notNull(),

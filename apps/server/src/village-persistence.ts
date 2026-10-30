@@ -1,5 +1,6 @@
 import type { VillageSnapshot } from '@ai-village/db';
 import type {
+  BoardState,
   ClockState,
   LedgerState,
   Order,
@@ -72,6 +73,12 @@ export function toSnapshot(state: VillageState): VillageSnapshot {
       dueDay: order.dueDay,
       status: order.status,
     })),
+    board: state.board.posts.map((post) => ({
+      id: post.id,
+      author: post.author,
+      text: post.text,
+      postedDay: post.postedDay,
+    })),
   };
 }
 
@@ -132,6 +139,11 @@ export function fromSnapshot(snapshot: VillageSnapshot): VillageState {
     nextId: orderRows.reduce((max, order) => Math.max(max, order.id + 1), 1),
   };
 
+  const board: BoardState = {
+    posts: snapshot.board,
+    nextId: snapshot.board.reduce((max, post) => Math.max(max, post.id + 1), 1),
+  };
+
   return {
     villageSeed: snapshot.clock.villageSeed,
     clock,
@@ -170,5 +182,6 @@ export function fromSnapshot(snapshot: VillageSnapshot): VillageState {
     daysSinceLastHappening: snapshot.clock.daysSinceLastHappening,
     relationships,
     orders,
+    board,
   };
 }
