@@ -2,6 +2,8 @@ import type { VillageSnapshot } from '@ai-village/db';
 import type {
   ClockState,
   LedgerState,
+  Order,
+  OrdersState,
   Relationships,
   VillageState,
   WeatherDay,
@@ -62,6 +64,14 @@ export function toSnapshot(state: VillageState): VillageSnapshot {
       importance: entry.importance,
       public: entry.public,
     })),
+    orders: state.orders.orders.map((order) => ({
+      id: order.id,
+      source: order.source,
+      items: order.items,
+      reward: order.reward,
+      dueDay: order.dueDay,
+      status: order.status,
+    })),
   };
 }
 
@@ -109,6 +119,19 @@ export function fromSnapshot(snapshot: VillageSnapshot): VillageState {
     ]),
   );
 
+  const orderRows: readonly Order[] = snapshot.orders.map((row) => ({
+    id: row.id,
+    source: row.source as Order['source'],
+    items: row.items,
+    reward: row.reward,
+    dueDay: row.dueDay,
+    status: row.status as Order['status'],
+  }));
+  const orders: OrdersState = {
+    orders: orderRows,
+    nextId: orderRows.reduce((max, order) => Math.max(max, order.id + 1), 1),
+  };
+
   return {
     villageSeed: snapshot.clock.villageSeed,
     clock,
@@ -146,5 +169,6 @@ export function fromSnapshot(snapshot: VillageSnapshot): VillageState {
     })),
     daysSinceLastHappening: snapshot.clock.daysSinceLastHappening,
     relationships,
+    orders,
   };
 }

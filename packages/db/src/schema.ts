@@ -81,6 +81,16 @@ export const weatherDays = sqliteTable('weather_days', {
   kind: text('kind').notNull(),
 });
 
+export const orders = sqliteTable('orders', {
+  id: integer('id').primaryKey(),
+  source: text('source').notNull(),
+  /** JSON-encoded array of { good, qty }. */
+  items: text('items').notNull(),
+  reward: real('reward').notNull(),
+  dueDay: integer('due_day').notNull(),
+  status: text('status').notNull(),
+});
+
 export const chronicle = sqliteTable('chronicle', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   minute: real('minute').notNull(),

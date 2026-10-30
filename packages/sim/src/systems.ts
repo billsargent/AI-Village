@@ -19,6 +19,12 @@ import {
   moodFromNeeds,
   type Needs,
 } from './needs.js';
+import {
+  createOrders,
+  deliverReadyOrders,
+  maybePostDownriverOrder,
+  type OrdersState,
+} from './orders.js';
 import { runEveningInteractions, type Relationships } from './relationships.js';
 import { pickHappening, type StorytellerStyle } from './storyteller.js';
 import { chargeUpkeep } from './upkeep.js';
@@ -63,6 +69,7 @@ export interface VillageState {
   chronicle: Chronicle;
   daysSinceLastHappening: number;
   relationships: Relationships;
+  orders: OrdersState;
 }
 
 export interface StartingStock {
@@ -104,6 +111,7 @@ export function createVillage(villageSeed: number, scenario: VillageScenario = {
     chronicle: [],
     daysSinceLastHappening: 0,
     relationships: {},
+    orders: createOrders(),
   };
 }
 
@@ -237,6 +245,41 @@ export function runVillageDay(state: VillageState): { state: VillageState; repor
   // economy: nightly upkeep
   ledger = chargeUpkeep(ledger, state.clock.minute, state.builtBuildingIds);
 
+  // economy: the downriver town may post a new order, and any accepted order with enough stock is delivered
+  const ordersBeforePosting = state.orders.orders;
+  let orders = maybePostDownriverOrder(state.orders, state.villageSeed, date.absoluteDay);
+  const ordersBeforeDelivery = orders.orders;
+  const delivery = deliverReadyOrders(orders, ledger, state.clock.minute, date.absoluteDay);
+  orders = delivery.ordersState;
+  ledger = delivery.ledger;
+
+  if (orders.orders.length > ordersBeforePosting.length) {
+    const posted = orders.orders.at(-1);
+    if (posted) {
+      chronicle = appendChronicle(chronicle, {
+        minute: state.clock.minute,
+        kind: 'order-posted',
+        text: `The downriver town posted an order for ${posted.items.map((item) => `${item.qty} ${item.good}`).join(', ')}.`,
+        actors: [],
+        importance: 2,
+        public: true,
+      });
+    }
+  }
+  for (const order of orders.orders) {
+    const before = ordersBeforeDelivery.find((candidate) => candidate.id === order.id);
+    if (order.status === 'delivered' && before?.status !== 'delivered') {
+      chronicle = appendChronicle(chronicle, {
+        minute: state.clock.minute,
+        kind: 'order-delivered',
+        text: `Delivered ${order.items.map((item) => `${item.qty} ${item.good}`).join(', ')} to the downriver town.`,
+        actors: [],
+        importance: 2,
+        public: true,
+      });
+    }
+  }
+
   // social: an evening interaction for every pair of villagers
   const villagerIds = state.villagers.map((v) => v.villagerId);
   const relationships = runEveningInteractions(
@@ -286,6 +329,7 @@ export function runVillageDay(state: VillageState): { state: VillageState; repor
     chronicle,
     daysSinceLastHappening,
     relationships,
+    orders,
   };
 
   return { state: nextState, report: { day: date.absoluteDay, date, weather, waiting, happening } };
