@@ -1,16 +1,27 @@
 import { calendarDateFromMinute, MINUTES_PER_DAY, type CalendarDate } from './calendar.js';
 import { createClock, type ClockState } from './clock.js';
+import { grantReliefIfNeeded, tryEat } from './eating.js';
 import { createLedger, MARKET_ACCOUNT, recordMovement, type LedgerState } from './ledger.js';
+import {
+  applyPurposeForDay,
+  createNeeds,
+  decayNeeds,
+  moodFactorFromMood,
+  moodFromNeeds,
+  type Needs,
+} from './needs.js';
 import { chargeUpkeep } from './upkeep.js';
 import { runStint, type WorkerAssignment } from './work.js';
 import { drawWeather, type WeatherDay } from './weather.js';
 
+const HOURS_PER_VILLAGE_DAY = 24;
+
 /**
- * The fixed order systems run in each village day (spec section 5). Needs,
- * schedules, social and happenings are still named no-ops; work and economy
- * now run one stint per villager per day and nightly building upkeep. A
- * real schedule (two stints a day, evenings, sleep) lands with the needs
- * and schedules systems.
+ * The fixed order systems run in each village day (spec section 5). Work
+ * and economy run one stint per villager per day, nightly upkeep, and
+ * eating/relief; schedules, social and happenings are still named no-ops.
+ * A real schedule (two stints a day, evenings, sleep) replaces this day-at-
+ * a-time simplification once the schedules system lands.
  */
 export const SYSTEM_ORDER = [
   'clock',
@@ -31,6 +42,7 @@ export interface VillageState {
   ledger: LedgerState;
   weatherHistory: readonly WeatherDay[];
   villagers: readonly WorkerAssignment[];
+  villagerNeeds: Readonly<Record<string, Needs>>;
   builtBuildingIds: readonly string[];
 }
 
@@ -59,12 +71,14 @@ export function createVillage(villageSeed: number, scenario: VillageScenario = {
       reason: 'opening stock',
     });
   }
+  const villagers = scenario.villagers ?? [];
   return {
     villageSeed,
     clock: createClock(),
     ledger,
     weatherHistory: [],
-    villagers: scenario.villagers ?? [],
+    villagers,
+    villagerNeeds: Object.fromEntries(villagers.map((v) => [v.villagerId, createNeeds()])),
     builtBuildingIds: scenario.builtBuildingIds ?? [],
   };
 }
@@ -86,24 +100,55 @@ export function runVillageDay(state: VillageState): { state: VillageState; repor
   const yesterday = state.weatherHistory.at(-1)?.kind ?? null;
   const weather = drawWeather(state.villageSeed, date.absoluteDay, date.season, yesterday);
 
-  // schedules, needs: land with a real schedule system; for now every
-  // villager works one stint a day at full mood.
+  // schedules: land with a real schedule system; for now every villager
+  // works exactly one stint a day.
 
-  // work
   let ledger = state.ledger;
+  const villagerNeeds: Record<string, Needs> = { ...state.villagerNeeds };
   const waiting: string[] = [];
+
   for (const villager of state.villagers) {
-    const result = runStint(ledger, villager, {
-      minute: state.clock.minute,
-      day: date.absoluteDay,
-      villageSeed: state.villageSeed,
-      season: date.season,
-      weather: weather.kind,
-    });
-    ledger = result.ledger;
-    if (result.waiting) {
-      waiting.push(result.waiting);
+    const needsBeforeWork = villagerNeeds[villager.villagerId] ?? createNeeds();
+
+    // needs -> mood -> the work system's moodFactor
+    const moodFactor = moodFactorFromMood(moodFromNeeds(needsBeforeWork));
+
+    // work
+    const stint = runStint(
+      ledger,
+      { ...villager, moodFactor },
+      {
+        minute: state.clock.minute,
+        day: date.absoluteDay,
+        villageSeed: state.villageSeed,
+        season: date.season,
+        weather: weather.kind,
+      },
+    );
+    ledger = stint.ledger;
+    if (stint.waiting) {
+      waiting.push(stint.waiting);
     }
+
+    // needs: eat from stores, or get a relief basket if there's neither food nor coins
+    const eaten = tryEat(ledger, state.clock.minute, villager.villagerId, needsBeforeWork);
+    ledger = eaten.ledger;
+    const relief = grantReliefIfNeeded(
+      ledger,
+      state.clock.minute,
+      villager.villagerId,
+      eaten.needs,
+      eaten.ate,
+    );
+    ledger = relief.ledger;
+
+    const decayed = decayNeeds(relief.needs, {
+      villageHours: HOURS_PER_VILLAGE_DAY,
+      isWorking: stint.waiting === null,
+      isAlone: false,
+      hasShelter: true,
+    });
+    villagerNeeds[villager.villagerId] = applyPurposeForDay(decayed, stint.waiting === null);
   }
 
   // economy: nightly upkeep
@@ -115,6 +160,7 @@ export function runVillageDay(state: VillageState): { state: VillageState; repor
     ...state,
     clock: { ...state.clock, minute: state.clock.minute + MINUTES_PER_DAY },
     ledger,
+    villagerNeeds,
     weatherHistory: [...state.weatherHistory, weather],
   };
 

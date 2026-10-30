@@ -9,6 +9,8 @@ export * from './clock.js';
 export * from './calendar.js';
 export * from './weather.js';
 export * from './ledger.js';
+export * from './needs.js';
+export * from './eating.js';
 export * from './work.js';
 export * from './upkeep.js';
 export * from './prices.js';

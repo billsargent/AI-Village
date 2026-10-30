@@ -4,15 +4,18 @@ import { runVillageDays } from './systems.js';
 
 /**
  * A first pass at spec section 6's "balance targets", checked against what
- * the sim can actually simulate so far: work, wages and upkeep. The targets
- * about villagers "feeding themselves" need the needs/consumption system
- * (hunger, eating) and the ones about treasury growth need the sales and
- * market-day systems - neither exists yet, so this test checks what those
- * later systems will need to stay true (no negative balances, a sane wage
- * and upkeep drain) rather than the full day-3/day-30 targets.
+ * the sim can actually simulate so far: work, wages, upkeep, and now needs
+ * and eating (including relief baskets). The targets about treasury growth
+ * still need the sales and market-day systems, which don't exist yet, so
+ * this test checks what those later systems will need to stay true (no
+ * negative balances, a bounded wage/upkeep/relief drain) rather than the
+ * literal day-30 treasury-growth target.
  */
 describe('a starting village (Mayor, farmer, innkeeper, carpenter)', () => {
-  const STARTING_TREASURY = 400;
+  // Large enough that 30 days of wages, upkeep and relief baskets can't
+  // run it dry - a village that can't afford its own upkeep is a separate
+  // (and real) failure mode, not what this test is checking.
+  const STARTING_TREASURY = 2000;
 
   function runStartingVillage(days: number) {
     return runVillageDays(7, days, {
@@ -44,12 +47,12 @@ describe('a starting village (Mayor, farmer, innkeeper, carpenter)', () => {
     expect(reports[0]?.waiting).toContain('No logs: the workshop needs logs');
   });
 
-  it('drains the treasury by a known amount per day: 3 wages (the carpenter waits unpaid) + 4 upkeep', () => {
+  it('drains the treasury by at least 3 wages (the carpenter waits unpaid) + 4 upkeep a day, plus any relief baskets', () => {
     const { state } = runStartingVillage(10);
     const wagesPerDay = 3 * 3;
     const upkeepPerDay = 4 * 1;
-    expect(getBalance(state.ledger, 'treasury', 'coins')).toBe(
-      STARTING_TREASURY - (wagesPerDay + upkeepPerDay) * 10,
-    );
+    const treasury = getBalance(state.ledger, 'treasury', 'coins');
+    expect(treasury).toBeLessThanOrEqual(STARTING_TREASURY - (wagesPerDay + upkeepPerDay) * 10);
+    expect(treasury).toBeGreaterThanOrEqual(0);
   });
 });
