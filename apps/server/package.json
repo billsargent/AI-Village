@@ -14,6 +14,7 @@
     "@ai-village/sim": "workspace:*",
     "@ai-village/db": "workspace:*",
     "@ai-village/agent": "workspace:*",
-    "@ai-village/integrations": "workspace:*"
+    "@ai-village/integrations": "workspace:*",
+    "@libsql/client": "^0.14.0"
   }
 }
