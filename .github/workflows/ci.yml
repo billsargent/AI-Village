@@ -29,3 +29,5 @@ jobs:
       - run: pnpm run depcheck
 
       - run: pnpm run test
+
+      - run: pnpm run art:check

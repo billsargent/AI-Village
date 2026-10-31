@@ -14,7 +14,8 @@
     "test": "vitest run",
     "depcheck": "dependency-cruiser --config .dependency-cruiser.cjs --validate packages apps tools",
     "doctor": "node tools/doctor.mjs",
-    "sim": "pnpm --filter @ai-village/tools run sim --"
+    "sim": "pnpm --filter @ai-village/tools run sim --",
+    "art:check": "pnpm --filter @ai-village/tools run art:check"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
