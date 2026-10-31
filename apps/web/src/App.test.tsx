@@ -12,12 +12,13 @@ const FACTS: VillageFacts = {
   year: 0,
   hour: 8,
   minuteOfHour: 0,
+  phase: 'work-first-stint',
   weather: 'clear',
   isMarketDay: false,
   festival: null,
   population: 2,
-  villagers: [],
-  builtBuildingIds: [],
+  villagers: [{ id: 'hesper', tradeId: 'baker', role: 'villager' }],
+  builtBuildingIds: ['bakery'],
   stores: {},
   treasuryCoins: 40,
   treasuryDeltaYesterday: 0,
@@ -61,6 +62,7 @@ describe('App', () => {
     expect(screen.getByText('Population: 2')).toBeTruthy();
     expect(screen.getByText('Treasury: 40 coins')).toBeTruthy();
     expect(screen.getByText('The market opened for the day.')).toBeTruthy();
+    expect(screen.getByText('hesper is working at (58, 11)')).toBeTruthy();
   });
 
   it('shows an error when the fetch fails', async () => {

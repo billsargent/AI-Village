@@ -4,6 +4,7 @@ import {
   getBalance,
   publicChronicle,
   type ChronicleEntry,
+  type DayPhase,
   type VillageState,
 } from '@ai-village/sim';
 
@@ -30,6 +31,8 @@ export interface FactsSnapshot {
   year: number;
   hour: number;
   minuteOfHour: number;
+  /** Spec section 5's day shape - which part of the village day it is right now. */
+  phase: DayPhase;
   weather: string;
   isMarketDay: boolean;
   /** The festival today, if any. */
@@ -101,6 +104,7 @@ export function facts(state: VillageState, _viewer: string, _purpose: string): F
     year: date.year,
     hour: date.hour,
     minuteOfHour: date.minuteOfHour,
+    phase: date.phase,
     weather,
     isMarketDay: date.isMarketDay,
     festival: date.festival?.name ?? null,

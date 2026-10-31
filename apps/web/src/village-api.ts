@@ -1,3 +1,4 @@
+import type { DayPhase } from '@ai-village/content';
 import { useQuery } from '@tanstack/react-query';
 
 /**
@@ -28,6 +29,7 @@ export interface VillageFacts {
   year: number;
   hour: number;
   minuteOfHour: number;
+  phase: DayPhase;
   weather: string;
   isMarketDay: boolean;
   festival: string | null;

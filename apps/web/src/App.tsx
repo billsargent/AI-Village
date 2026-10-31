@@ -1,4 +1,36 @@
-import { useVillageFacts } from './village-api.js';
+import { positionForWorker } from '@ai-village/content';
+import { useVillageFacts, type VillagerFact, type VillageFacts } from './village-api.js';
+
+interface Whereabouts {
+  villager: VillagerFact;
+  x: number;
+  y: number;
+}
+
+/**
+ * Who's currently placed at their built workplace, per `positionForWorker`
+ * (spec section 8's plot layout). Each trade's workers fill that
+ * workplace's plots in order, so two farmers at a one-field village both
+ * show at the same plot - there's no per-villager instance assignment
+ * yet, so this never guesses which exact field is "theirs".
+ */
+function whereaboutsNow(data: VillageFacts): readonly Whereabouts[] {
+  const slotByWorksAt = new Map<string, number>();
+  const whereabouts: Whereabouts[] = [];
+  for (const villager of data.villagers) {
+    const plot = positionForWorker(villager.tradeId, data.builtBuildingIds, data.phase);
+    if (!plot) {
+      continue;
+    }
+    const slot = slotByWorksAt.get(plot.buildingId) ?? 0;
+    const placed = positionForWorker(villager.tradeId, data.builtBuildingIds, data.phase, slot);
+    slotByWorksAt.set(plot.buildingId, slot + 1);
+    if (placed) {
+      whereabouts.push({ villager, x: placed.x, y: placed.y });
+    }
+  }
+  return whereabouts;
+}
 
 export function App() {
   const { data, isPending, isError, error } = useVillageFacts();
@@ -10,6 +42,8 @@ export function App() {
   if (isError) {
     return <p className="p-4 text-red-700">Couldn't reach the village: {error.message}</p>;
   }
+
+  const whereabouts = whereaboutsNow(data);
 
   return (
     <main className="p-4 text-slate-900">
@@ -29,6 +63,18 @@ export function App() {
             <li key={`${entry.minute}-${index}`}>{entry.text}</li>
           ))}
         </ul>
+      )}
+      {whereabouts.length > 0 && (
+        <>
+          <h2 className="mt-4 font-semibold">Right now</h2>
+          <ul className="list-disc pl-5">
+            {whereabouts.map(({ villager, x, y }) => (
+              <li key={villager.id}>
+                {villager.id} is working at ({x}, {y})
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </main>
   );

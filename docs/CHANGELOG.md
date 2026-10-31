@@ -90,3 +90,13 @@
   states. PixiJS rendering, the Tiled map and interiors, and any art
   pipeline work are left for later batches - they need assets that don't
   exist in this repo yet (#103).
+- A fixed plot layout for every building (spec section 8's districts,
+  plus the Riverside and Forest side maps), validated for map bounds and
+  overlapping footprints, and `positionForWorker`, deriving where a
+  villager working a given trade is right now from their workplace, its
+  build state and the day's phase - `undefined`, not a guess, whenever
+  that can't be said honestly (off-duty hours; villagers have no
+  assigned home yet). `FactsSnapshot` gains `phase` so this is usable
+  end to end; `apps/web` shows a "Right now" list proving it reaches the
+  browser. Still plain text - the PixiJS canvas, real Tiled maps and art
+  are later batches (#105).
