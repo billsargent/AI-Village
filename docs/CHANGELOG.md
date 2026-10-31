@@ -100,3 +100,17 @@
   end to end; `apps/web` shows a "Right now" list proving it reaches the
   browser. Still plain text - the PixiJS canvas, real Tiled maps and art
   are later batches (#105).
+- Picked art sources (spec section 10): Serene Village Revamped (LimeZu,
+  CC-BY 4.0) for terrain and village buildings, Ninja Adventure (CC0)
+  for characters/props/icons/sounds. LimeZu's companion "Modern
+  Interiors" pack was ruled out - its EULA forbids redistribution, which
+  fails this repo's own public-redistribution rule. Both approved packs
+  are now downloaded and vendored locally under the git-ignored
+  `art/vendor/` (#107, a human step - needs a real browser/itch.io
+  session).
+- `pnpm art:check`: parses `docs/ART_CREDITS.md`'s table and checks
+  every file under `art/src` is listed with an allowed licence (CC0,
+  CC-BY, OFL, or the project's own hand-made work), and every listed
+  file actually exists. Wired into CI. Runs clean today since `art/src`
+  is still empty - this is the gate, ahead of any art actually being
+  copied in (#109).

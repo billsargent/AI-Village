@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc -b",
-    "sim": "tsx sim-run.ts"
+    "sim": "tsx sim-run.ts",
+    "art:check": "tsx art-check-cli.ts"
   },
   "dependencies": {
     "@ai-village/content": "workspace:*",
