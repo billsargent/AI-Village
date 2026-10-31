@@ -54,3 +54,7 @@
 - `CallVote`: a generic "ask the village and tally" vote, closing out
   `apply(command)`'s last named command. Every villager casts one
   seeded-random vote among the options, tallied immediately (#90).
+- The approvals inbox: a tool call needing the owner's approval is now
+  queued, with a rendered preview, instead of just reported and dropped.
+  Approving a queued request runs the tool now, against the current
+  state - declining just records the decision (#92).

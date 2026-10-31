@@ -2,6 +2,7 @@ import type { ChatCompletionResult, ToolCall } from '@ai-village/integrations';
 import { createVillage, getBalance } from '@ai-village/sim';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { createApprovalsInbox } from './approvals.js';
 import { facts } from './facts.js';
 import { runChat, runTurn, type ModelClient, type TurnContext } from './runner.js';
 import { GIFT_TOOL } from './sim-tools.js';
@@ -141,6 +142,7 @@ describe('runTurn', () => {
       tools: [GIFT_TOOL],
       turn: { tainted: false },
       sessionApprovedToolIds: new Set(),
+      inbox: createApprovalsInbox(),
     };
 
     const result = await runTurn(
@@ -180,6 +182,7 @@ describe('runTurn', () => {
       tools: [needsApprovalTool],
       turn: { tainted: false },
       sessionApprovedToolIds: new Set(),
+      inbox: createApprovalsInbox(),
     };
 
     const result = await runTurn(
@@ -190,7 +193,13 @@ describe('runTurn', () => {
       ctx,
     );
 
-    expect(result.pendingApproval).toEqual({ toolId: 'risky_thing', args: {} });
+    expect(result.inbox.requests).toHaveLength(1);
+    expect(result.inbox.requests[0]).toMatchObject({
+      toolId: 'risky_thing',
+      args: {},
+      requestedBy: 'ada',
+      status: 'pending',
+    });
     expect(result.state).toBe(village);
     expect(result.events).toEqual([]);
   });
@@ -212,6 +221,7 @@ describe('runTurn', () => {
       tools: [GIFT_TOOL],
       turn: { tainted: false },
       sessionApprovedToolIds: new Set(),
+      inbox: createApprovalsInbox(),
     };
 
     const result = await runTurn(
@@ -246,6 +256,7 @@ describe('runTurn', () => {
       tools: [GIFT_TOOL],
       turn: { tainted: false },
       sessionApprovedToolIds: new Set(),
+      inbox: createApprovalsInbox(),
     };
 
     const result = await runTurn(

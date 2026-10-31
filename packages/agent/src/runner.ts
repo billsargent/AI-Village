@@ -1,7 +1,12 @@
 import type { ChatCompletionResult, ChatMessage, ToolSchema } from '@ai-village/integrations';
 import type { DomainEvent, VillageState } from '@ai-village/sim';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { needsApproval, type TurnState } from './approvals.js';
+import {
+  needsApproval,
+  requestApproval,
+  type ApprovalsInbox,
+  type TurnState,
+} from './approvals.js';
 import { renderFacts, type FactsSnapshot } from './facts.js';
 import { appendMeterRecord, type Meter, type MeterRecord } from './meter.js';
 import { modelSettingsFor } from './models.js';
@@ -98,6 +103,7 @@ export interface TurnContext {
   tools: readonly ToolDefinition[];
   turn: TurnState;
   sessionApprovedToolIds: ReadonlySet<string>;
+  inbox: ApprovalsInbox;
 }
 
 export interface RunTurnResult {
@@ -106,12 +112,12 @@ export interface RunTurnResult {
   state: VillageState;
   events: readonly DomainEvent[];
   /**
-   * Set when a step's tool call needs the owner's approval. There's no
-   * approvals inbox or resume mechanism yet to let the owner actually
-   * answer mid-turn, so the turn stops here and reports it rather than
-   * running the tool or guessing an answer.
+   * Carries forward `ctx.inbox`, with a new pending request appended if a
+   * step's tool call needed the owner's approval. The turn stops there
+   * and reports it rather than running the tool or guessing an answer -
+   * see `decideApproval` for how the owner's decision later runs it.
    */
-  pendingApproval?: { toolId: string; args: unknown };
+  inbox: ApprovalsInbox;
   /** Set if the model never settled on a final reply within the purpose's maxSteps. */
   ranOutOfSteps?: boolean;
 }
@@ -143,6 +149,7 @@ export async function runTurn(
 
   let state = ctx.state;
   let currentMeter = meter;
+  let currentInbox = ctx.inbox;
   const events: DomainEvent[] = [];
 
   for (let step = 0; step < settings.maxSteps; step++) {
@@ -168,7 +175,7 @@ export async function runTurn(
     });
 
     if (!result.toolCalls || result.toolCalls.length === 0) {
-      return { reply: result.text, meter: currentMeter, state, events };
+      return { reply: result.text, meter: currentMeter, state, events, inbox: currentInbox };
     }
 
     messages.push({
@@ -191,16 +198,21 @@ export async function runTurn(
       if (needsApproval(tool, ctx.turn, ctx.sessionApprovedToolIds)) {
         let args: unknown = call.arguments;
         try {
-          args = JSON.parse(call.arguments);
+          args = tool.args.parse(JSON.parse(call.arguments));
         } catch {
-          // Leave args as the raw string; this is only for reporting.
+          try {
+            args = JSON.parse(call.arguments);
+          } catch {
+            // Leave args as the raw string; this is only for reporting.
+          }
         }
+        const requested = requestApproval(currentInbox, tool, args, villager.id, Date.now());
         return {
           reply: '',
           meter: currentMeter,
           state,
           events,
-          pendingApproval: { toolId: tool.id, args },
+          inbox: requested.inbox,
         };
       }
 
@@ -221,5 +233,12 @@ export async function runTurn(
     }
   }
 
-  return { reply: '', meter: currentMeter, state, events, ranOutOfSteps: true };
+  return {
+    reply: '',
+    meter: currentMeter,
+    state,
+    events,
+    inbox: currentInbox,
+    ranOutOfSteps: true,
+  };
 }
