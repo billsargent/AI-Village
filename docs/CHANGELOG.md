@@ -114,3 +114,10 @@
   file actually exists. Wired into CI. Runs clean today since `art/src`
   is still empty - this is the gate, ahead of any art actually being
   copied in (#109).
+- Added the original Serene Village pack (LimeZu, CC-BY 4.0 - same
+  artist and licence already approved for Serene Village Revamped) as a
+  third art source, for generic interior furniture (beds, table,
+  bookshelf, chairs, chest, rug, plants). Trade-specific furniture
+  (anvil, forge, altar, millstones, loom, pews) is still a gap -
+  deferred to hand-made Aseprite work, same as spec section 10 already
+  planned for missing buildings.
