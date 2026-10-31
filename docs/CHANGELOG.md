@@ -77,3 +77,9 @@
   before a call is made. The daily soft budget, chatter share and
   per-work-session ask each gate purposes that aren't built yet, so
   there's nothing real to enforce for them (#98).
+- A real Hono server for `apps/server`: `createApp()` returns an app with
+  a `GET /api/village` endpoint serving a bootstrapped village's facts
+  snapshot as JSON, plus a `pnpm --filter @ai-village/server run dev`
+  entry point that starts it on a real port. Persistence, auth and any
+  route beyond this one read endpoint are left for later batches of the
+  web renderer/map/interiors epic (#101).
