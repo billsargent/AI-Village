@@ -83,3 +83,10 @@
   entry point that starts it on a real port. Persistence, auth and any
   route beyond this one read endpoint are left for later batches of the
   web renderer/map/interiors epic (#101).
+- A real Vite + React 19 + Tailwind 4 + TanStack Query client for
+  `apps/web`: a page that fetches `/api/village` (through a dev-time Vite
+  proxy to the server) and shows the weekday, season, weather, market
+  day, population, treasury and recent chronicle, with loading and error
+  states. PixiJS rendering, the Tiled map and interiors, and any art
+  pipeline work are left for later batches - they need assets that don't
+  exist in this repo yet (#103).
