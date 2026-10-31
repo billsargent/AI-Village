@@ -92,6 +92,27 @@ const SAMPLE_SNAPSHOT: VillageSnapshot = {
     },
   ],
   board: [{ id: 1, author: 'ada', text: 'Lost a basket near the mill.', postedDay: 3 }],
+  memories: [
+    {
+      id: 1,
+      villagerId: 'ada',
+      minute: 0,
+      text: 'Met Tobin at the market.',
+      importance: 6,
+      about: null,
+      lastRecalledMinute: null,
+    },
+  ],
+  promises: [
+    {
+      id: 1,
+      villagerId: 'ada',
+      text: 'Finish the fence',
+      createdMinute: 0,
+      dueMinute: 7200,
+      status: 'open',
+    },
+  ],
 };
 
 describe('saveVillage / loadVillage', () => {

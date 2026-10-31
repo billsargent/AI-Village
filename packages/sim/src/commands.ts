@@ -9,15 +9,20 @@
  * All five commands spec section 2 names now have a mechanic buildable
  * from what the sim has. `CallVote` is a generic "ask the village and
  * tally" mechanic (see `applyCallVote` below for what that deliberately
- * leaves out, like trait/affinity-weighted voting).
+ * leaves out, like trait/affinity-weighted voting). `Remember`,
+ * `MakePromise`, `DecidePromise` and `ThankVillager` add spec section
+ * 7/15's memory and promises layers on top.
  */
 
 import { getBuilding, getGood } from '@ai-village/content';
 import { postToBoard } from './board.js';
-import { calendarDateFromMinute } from './calendar.js';
+import { calendarDateFromMinute, MINUTES_PER_DAY } from './calendar.js';
 import { appendChronicle } from './chronicle.js';
 import { MARKET_ACCOUNT, recordMovement } from './ledger.js';
+import { addMemory } from './memory.js';
+import { MAX_NEED } from './needs.js';
 import type { OrderStatus } from './orders.js';
+import { decidePromise, makePromise, type PromiseStatus } from './promises.js';
 import { seededRandom, weightedPick } from './random.js';
 import { applyGift } from './relationships.js';
 import type { VillageState } from './systems.js';
@@ -28,7 +33,15 @@ export type Command =
   | { kind: 'AcceptOrder'; orderId: number }
   | { kind: 'DeclineOrder'; orderId: number }
   | { kind: 'PostOnBoard'; author: string; text: string }
-  | { kind: 'CallVote'; topic: string; options: readonly string[] };
+  | { kind: 'CallVote'; topic: string; options: readonly string[] }
+  | { kind: 'Remember'; villagerId: string; text: string; importance: number; about?: string }
+  | { kind: 'MakePromise'; villagerId: string; text: string; dueInDays: number }
+  | {
+      kind: 'DecidePromise';
+      promiseId: number;
+      decision: Extract<PromiseStatus, 'kept' | 'released'>;
+    }
+  | { kind: 'ThankVillager'; villagerId: string };
 
 export type DomainEvent =
   | { kind: 'GiftGiven'; from: string; to: string; item: string; qty: number }
@@ -41,7 +54,15 @@ export type DomainEvent =
       topic: string;
       winner: string;
       tally: Readonly<Record<string, number>>;
-    };
+    }
+  | { kind: 'Remembered'; memoryId: number }
+  | { kind: 'PromiseMade'; promiseId: number }
+  | {
+      kind: 'PromiseDecided';
+      promiseId: number;
+      decision: Extract<PromiseStatus, 'kept' | 'released'>;
+    }
+  | { kind: 'VillagerThanked'; villagerId: string; memoryId: number };
 
 export interface CommandResult {
   state: VillageState;
@@ -65,6 +86,14 @@ export function apply(state: VillageState, command: Command): CommandResult {
       return applyPostOnBoard(state, command);
     case 'CallVote':
       return applyCallVote(state, command);
+    case 'Remember':
+      return applyRemember(state, command);
+    case 'MakePromise':
+      return applyMakePromise(state, command);
+    case 'DecidePromise':
+      return applyDecidePromise(state, command);
+    case 'ThankVillager':
+      return applyThankVillager(state, command);
   }
 }
 
@@ -310,5 +339,143 @@ function applyCallVote(
   return {
     state: { ...state, chronicle },
     events: [{ kind: 'VoteResolved', topic, winner, tally }],
+  };
+}
+
+function requireVillager(state: VillageState, villagerId: string): void {
+  if (!state.villagers.some((villager) => villager.villagerId === villagerId)) {
+    throw new CommandError(`Unknown villager "${villagerId}"`);
+  }
+}
+
+function applyRemember(
+  state: VillageState,
+  command: { villagerId: string; text: string; importance: number; about?: string },
+): CommandResult {
+  requireVillager(state, command.villagerId);
+  if (command.text.trim().length === 0) {
+    throw new CommandError('A memory cannot be empty');
+  }
+
+  const memoryId = state.memory.nextId;
+  const memory = addMemory(state.memory, {
+    villagerId: command.villagerId,
+    minute: state.clock.minute,
+    text: command.text,
+    importance: command.importance,
+    ...(command.about !== undefined ? { about: command.about } : {}),
+  });
+
+  return {
+    state: { ...state, memory },
+    events: [{ kind: 'Remembered', memoryId }],
+  };
+}
+
+function applyMakePromise(
+  state: VillageState,
+  command: { villagerId: string; text: string; dueInDays: number },
+): CommandResult {
+  requireVillager(state, command.villagerId);
+  if (command.text.trim().length === 0) {
+    throw new CommandError('A promise cannot be empty');
+  }
+  if (command.dueInDays <= 0) {
+    throw new CommandError('A promise needs a due day in the future');
+  }
+
+  const promiseId = state.promises.nextId;
+  const promises = makePromise(state.promises, {
+    villagerId: command.villagerId,
+    text: command.text,
+    createdMinute: state.clock.minute,
+    dueMinute: state.clock.minute + command.dueInDays * MINUTES_PER_DAY,
+  });
+
+  const chronicle = appendChronicle(state.chronicle, {
+    minute: state.clock.minute,
+    kind: 'promise',
+    text: `${command.villagerId} promised the owner: "${command.text}"`,
+    actors: [command.villagerId],
+    importance: 2,
+    public: true,
+  });
+
+  return {
+    state: { ...state, promises, chronicle },
+    events: [{ kind: 'PromiseMade', promiseId }],
+  };
+}
+
+function applyDecidePromise(
+  state: VillageState,
+  command: { promiseId: number; decision: Extract<PromiseStatus, 'kept' | 'released'> },
+): CommandResult {
+  const promise = state.promises.promises.find((candidate) => candidate.id === command.promiseId);
+  if (!promise) {
+    throw new CommandError(`Unknown promise #${command.promiseId}`);
+  }
+  if (promise.status !== 'open') {
+    throw new CommandError(`Promise #${command.promiseId} is not open (status: ${promise.status})`);
+  }
+
+  const promises = decidePromise(state.promises, command.promiseId, command.decision);
+
+  const chronicle = appendChronicle(state.chronicle, {
+    minute: state.clock.minute,
+    kind: 'promise-decided',
+    text:
+      command.decision === 'kept'
+        ? `${promise.villagerId} kept their promise: "${promise.text}"`
+        : `${promise.villagerId} was released from their promise: "${promise.text}"`,
+    actors: [promise.villagerId],
+    importance: 2,
+    public: true,
+  });
+
+  return {
+    state: { ...state, promises, chronicle },
+    events: [{ kind: 'PromiseDecided', promiseId: command.promiseId, decision: command.decision }],
+  };
+}
+
+const THANK_YOU_FUN_BOOST = 20;
+
+/** Spec section 15: "the owner can thank a villager with one click: their mood lifts, and they remember it." */
+function applyThankVillager(state: VillageState, command: { villagerId: string }): CommandResult {
+  requireVillager(state, command.villagerId);
+
+  const needs = state.villagerNeeds[command.villagerId];
+  const villagerNeeds = needs
+    ? {
+        ...state.villagerNeeds,
+        [command.villagerId]: {
+          ...needs,
+          fun: Math.min(MAX_NEED, needs.fun + THANK_YOU_FUN_BOOST),
+        },
+      }
+    : state.villagerNeeds;
+
+  const memoryId = state.memory.nextId;
+  const memory = addMemory(state.memory, {
+    villagerId: command.villagerId,
+    minute: state.clock.minute,
+    text: 'The owner thanked me.',
+    importance: 5,
+    about: 'owner',
+  });
+
+  const chronicle = appendChronicle(state.chronicle, {
+    minute: state.clock.minute,
+    kind: 'thanks',
+    text: `The owner thanked ${command.villagerId}.`,
+    actors: [command.villagerId],
+    importance: 2,
+    public: true,
+  });
+
+  return {
+    state: { ...state, villagerNeeds, memory, chronicle },
+    events: [{ kind: 'VillagerThanked', villagerId: command.villagerId, memoryId }],
   };
 }

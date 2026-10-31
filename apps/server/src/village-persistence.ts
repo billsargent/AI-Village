@@ -3,8 +3,10 @@ import type {
   BoardState,
   ClockState,
   LedgerState,
+  MemoryState,
   Order,
   OrdersState,
+  PromisesState,
   Relationships,
   VillageState,
   WeatherDay,
@@ -81,6 +83,23 @@ export function toSnapshot(state: VillageState): VillageSnapshot {
       text: post.text,
       postedDay: post.postedDay,
     })),
+    memories: state.memory.memories.map((memory) => ({
+      id: memory.id,
+      villagerId: memory.villagerId,
+      minute: memory.minute,
+      text: memory.text,
+      importance: memory.importance,
+      about: memory.about,
+      lastRecalledMinute: memory.lastRecalledMinute,
+    })),
+    promises: state.promises.promises.map((promise) => ({
+      id: promise.id,
+      villagerId: promise.villagerId,
+      text: promise.text,
+      createdMinute: promise.createdMinute,
+      dueMinute: promise.dueMinute,
+      status: promise.status,
+    })),
   };
 }
 
@@ -146,6 +165,19 @@ export function fromSnapshot(snapshot: VillageSnapshot): VillageState {
     nextId: snapshot.board.reduce((max, post) => Math.max(max, post.id + 1), 1),
   };
 
+  const memory: MemoryState = {
+    memories: snapshot.memories,
+    nextId: snapshot.memories.reduce((max, memory) => Math.max(max, memory.id + 1), 1),
+  };
+
+  const promises: PromisesState = {
+    promises: snapshot.promises.map((row) => ({
+      ...row,
+      status: row.status as PromisesState['promises'][number]['status'],
+    })),
+    nextId: snapshot.promises.reduce((max, promise) => Math.max(max, promise.id + 1), 1),
+  };
+
   return {
     villageSeed: snapshot.clock.villageSeed,
     clock,
@@ -186,5 +218,7 @@ export function fromSnapshot(snapshot: VillageSnapshot): VillageState {
     relationships,
     orders,
     board,
+    memory,
+    promises,
   };
 }

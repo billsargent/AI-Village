@@ -1,10 +1,11 @@
-import { createVillage } from '@ai-village/sim';
+import { createVillage, type Memory, type VillagerPromise } from '@ai-village/sim';
 import { describe, expect, it } from 'vitest';
 import { facts } from './facts.js';
 import {
   buildPromptMessages,
   CHARTER,
   playbooksFor,
+  renderMemoriesBlock,
   renderVillagerCard,
   VILLAGE_PLAYBOOK,
 } from './prompt.js';
@@ -120,5 +121,60 @@ describe('buildPromptMessages', () => {
     const historyInPrompt = messages.slice(-11, -1);
     expect(historyInPrompt.map((m) => m.content)).toEqual(history.slice(-10).map((m) => m.content));
     expect(messages.at(-1)?.content).toBe('Hi');
+  });
+});
+
+function memory(overrides: Partial<Memory> = {}): Memory {
+  return {
+    id: 1,
+    villagerId: 'ada',
+    minute: 0,
+    text: 'Met Tobin at the market.',
+    importance: 6,
+    about: null,
+    lastRecalledMinute: null,
+    ...overrides,
+  };
+}
+
+function promise(overrides: Partial<VillagerPromise> = {}): VillagerPromise {
+  return {
+    id: 1,
+    villagerId: 'ada',
+    text: 'Finish the fence',
+    createdMinute: 0,
+    dueMinute: 1440,
+    status: 'open',
+    ...overrides,
+  };
+}
+
+describe('renderMemoriesBlock', () => {
+  it('returns null when there are no memories or promises', () => {
+    expect(renderMemoriesBlock([], [], 0)).toBeNull();
+  });
+
+  it('lists memories, tagging ones about the owner', () => {
+    const text = renderMemoriesBlock(
+      [
+        memory({ text: 'Baked bread.' }),
+        memory({ text: 'The owner likes honey.', about: 'owner' }),
+      ],
+      [],
+      0,
+    );
+    expect(text).toContain('- Baked bread.');
+    expect(text).toContain('- The owner likes honey. (about owner)');
+  });
+
+  it('lists open promises with the days left until due', () => {
+    const text = renderMemoriesBlock([], [promise({ dueMinute: 3 * 1440 })], 1440);
+    expect(text).toContain('- Finish the fence (due in 2 days)');
+  });
+
+  it('includes both sections when both are present', () => {
+    const text = renderMemoriesBlock([memory()], [promise()], 0);
+    expect(text).toContain('Your memories:');
+    expect(text).toContain('Your open promises:');
   });
 });

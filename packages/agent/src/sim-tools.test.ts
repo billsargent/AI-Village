@@ -6,7 +6,9 @@ import {
   DECLINE_ORDER_TOOL,
   GIFT_TOOL,
   POST_ON_BOARD_TOOL,
+  PROMISE_TOOL,
   PROPOSE_BUILDING_TOOL,
+  REMEMBER_TOOL,
   SIM_TOOLS,
 } from './sim-tools.js';
 import { resolveVillagerTools, ToolRegistry } from './tools.js';
@@ -174,6 +176,66 @@ describe('CALL_VOTE_TOOL', () => {
   });
 });
 
+describe('REMEMBER_TOOL', () => {
+  it('runs the Remember command against the sim state', () => {
+    const village = createVillage(1, {
+      villagers: [
+        { villagerId: 'ada', tradeId: 'farmer', skillLevel: 1, hasTool: false, moodFactor: 1 },
+      ],
+    });
+    const args = REMEMBER_TOOL.args.parse({
+      villagerId: 'ada',
+      text: 'Met Tobin at the market.',
+      importance: 6,
+    });
+    const result = REMEMBER_TOOL.run?.(args, { state: village }) as {
+      state: typeof village;
+      events: unknown[];
+    };
+
+    expect(result.state.memory.memories[0]?.text).toBe('Met Tobin at the market.');
+    expect(result.events).toEqual([{ kind: 'Remembered', memoryId: 1 }]);
+  });
+
+  it('is a risk-none game action granted to the Villager role', () => {
+    expect(REMEMBER_TOOL.kind).toBe('game');
+    expect(REMEMBER_TOOL.risk).toBe('none');
+    const registry = new ToolRegistry();
+    registry.register(REMEMBER_TOOL);
+    expect(resolveVillagerTools(registry, 'villager', [])).toEqual(['remember']);
+  });
+});
+
+describe('PROMISE_TOOL', () => {
+  it('runs the MakePromise command against the sim state', () => {
+    const village = createVillage(1, {
+      villagers: [
+        { villagerId: 'ada', tradeId: 'farmer', skillLevel: 1, hasTool: false, moodFactor: 1 },
+      ],
+    });
+    const args = PROMISE_TOOL.args.parse({
+      villagerId: 'ada',
+      text: 'Finish the fence',
+      dueInDays: 5,
+    });
+    const result = PROMISE_TOOL.run?.(args, { state: village }) as {
+      state: typeof village;
+      events: unknown[];
+    };
+
+    expect(result.state.promises.promises[0]?.text).toBe('Finish the fence');
+    expect(result.events).toEqual([{ kind: 'PromiseMade', promiseId: 1 }]);
+  });
+
+  it('is a risk-none game action granted to the Villager role', () => {
+    expect(PROMISE_TOOL.kind).toBe('game');
+    expect(PROMISE_TOOL.risk).toBe('none');
+    const registry = new ToolRegistry();
+    registry.register(PROMISE_TOOL);
+    expect(resolveVillagerTools(registry, 'villager', [])).toEqual(['promise']);
+  });
+});
+
 describe('SIM_TOOLS', () => {
   it('contains every sim tool with unique ids', () => {
     expect(new Set(SIM_TOOLS.map((tool) => tool.id))).toEqual(
@@ -184,6 +246,8 @@ describe('SIM_TOOLS', () => {
         'decline_order',
         'post_on_board',
         'call_vote',
+        'remember',
+        'promise',
       ]),
     );
   });
