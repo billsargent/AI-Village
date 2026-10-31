@@ -51,3 +51,6 @@
   Mayor per village), flowing through `facts()` - the spec's own facts
   block shows the Mayor by role rather than trade - and DB persistence
   (#88).
+- `CallVote`: a generic "ask the village and tally" vote, closing out
+  `apply(command)`'s last named command. Every villager casts one
+  seeded-random vote among the options, tallied immediately (#90).

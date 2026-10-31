@@ -1,10 +1,10 @@
 /**
  * The tool registry's real, runnable tools (spec section 12's roles
  * table: Villager gets "gift" and "post on the board"; Mayor gets
- * "propose building" and "accept orders"), now that `apply(command)`
- * exists for each (#68, #84, #86). All are game actions - risk none,
- * never needing approval - so they run straight against the sim
- * through `apply()`.
+ * "propose building", "accept orders" and "call a meeting or vote"),
+ * now that `apply(command)` exists for each (#68, #84, #86, #90). All
+ * are game actions - risk none, never needing approval - so they run
+ * straight against the sim through `apply()`.
  */
 
 import { apply } from '@ai-village/sim';
@@ -86,10 +86,25 @@ export const POST_ON_BOARD_TOOL = defineTool({
   run: (args, ctx) => apply(ctx.state, { kind: 'PostOnBoard', ...args }),
 });
 
+export const CALL_VOTE_TOOL = defineTool({
+  id: 'call_vote',
+  title: 'Call a vote',
+  kind: 'game',
+  risk: 'none',
+  approval: 'never',
+  roles: ['mayor'],
+  purposes: ['chat'],
+  costUsd: 0,
+  args: z.object({ topic: z.string(), options: z.array(z.string()).min(2) }),
+  preview: (args) => `Call a vote on "${args.topic}" (${args.options.join(' / ')})`,
+  run: (args, ctx) => apply(ctx.state, { kind: 'CallVote', ...args }),
+});
+
 export const SIM_TOOLS = [
   GIFT_TOOL,
   PROPOSE_BUILDING_TOOL,
   ACCEPT_ORDER_TOOL,
   DECLINE_ORDER_TOOL,
   POST_ON_BOARD_TOOL,
+  CALL_VOTE_TOOL,
 ] as const;

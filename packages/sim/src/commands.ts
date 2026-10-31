@@ -6,11 +6,10 @@
  * is sim's job, the same as the rest of the economy, and both the agent
  * and a future owner UI call the same `apply()`.
  *
- * Of the five commands spec section 2 names, four have a mechanic now
- * buildable from what the sim has (`GiveGift`, `ProposeBuilding`,
- * `AcceptOrder`/`DeclineOrder`, `PostOnBoard`); `CallVote` still waits
- * on a sim feature that doesn't exist yet (villager roles) - see issue
- * #71.
+ * All five commands spec section 2 names now have a mechanic buildable
+ * from what the sim has. `CallVote` is a generic "ask the village and
+ * tally" mechanic (see `applyCallVote` below for what that deliberately
+ * leaves out, like trait/affinity-weighted voting).
  */
 
 import { getBuilding, getGood } from '@ai-village/content';
@@ -19,6 +18,7 @@ import { calendarDateFromMinute } from './calendar.js';
 import { appendChronicle } from './chronicle.js';
 import { MARKET_ACCOUNT, recordMovement } from './ledger.js';
 import type { OrderStatus } from './orders.js';
+import { seededRandom, weightedPick } from './random.js';
 import { applyGift } from './relationships.js';
 import type { VillageState } from './systems.js';
 
@@ -27,14 +27,21 @@ export type Command =
   | { kind: 'ProposeBuilding'; buildingId: string }
   | { kind: 'AcceptOrder'; orderId: number }
   | { kind: 'DeclineOrder'; orderId: number }
-  | { kind: 'PostOnBoard'; author: string; text: string };
+  | { kind: 'PostOnBoard'; author: string; text: string }
+  | { kind: 'CallVote'; topic: string; options: readonly string[] };
 
 export type DomainEvent =
   | { kind: 'GiftGiven'; from: string; to: string; item: string; qty: number }
   | { kind: 'BuildingFinished'; buildingId: string }
   | { kind: 'OrderAccepted'; orderId: number }
   | { kind: 'OrderDeclined'; orderId: number }
-  | { kind: 'PostedOnBoard'; postId: number };
+  | { kind: 'PostedOnBoard'; postId: number }
+  | {
+      kind: 'VoteResolved';
+      topic: string;
+      winner: string;
+      tally: Readonly<Record<string, number>>;
+    };
 
 export interface CommandResult {
   state: VillageState;
@@ -56,6 +63,8 @@ export function apply(state: VillageState, command: Command): CommandResult {
       return applyOrderDecision(state, command.orderId, 'declined');
     case 'PostOnBoard':
       return applyPostOnBoard(state, command);
+    case 'CallVote':
+      return applyCallVote(state, command);
   }
 }
 
@@ -237,5 +246,69 @@ function applyPostOnBoard(
   return {
     state: { ...state, board, chronicle },
     events: [{ kind: 'PostedOnBoard', postId }],
+  };
+}
+
+/**
+ * Spec section 15's "ask the village" is the closest named vote to a
+ * generic mechanic: a question with options, tallied. Building-approval
+ * votes, conduct votes (weighted by trust) and elections (weighted by
+ * affinity/traits) are each their own flavor the spec names but doesn't
+ * unify - and none of those weights are tracked per-villager in the sim
+ * yet, so every villager here casts one uniformly random vote among the
+ * options, resolved immediately. No new persisted state: the chronicle
+ * entry and the returned tally are the whole record.
+ */
+function applyCallVote(
+  state: VillageState,
+  command: { topic: string; options: readonly string[] },
+): CommandResult {
+  const { topic, options } = command;
+  if (options.length < 2) {
+    throw new CommandError('A vote needs at least two options');
+  }
+  if (new Set(options).size !== options.length) {
+    throw new CommandError('A vote cannot have duplicate options');
+  }
+  if (state.villagers.length === 0) {
+    throw new CommandError('There is nobody to vote');
+  }
+
+  const day = calendarDateFromMinute(state.clock.minute).absoluteDay;
+  const tally: Record<string, number> = Object.fromEntries(options.map((option) => [option, 0]));
+  for (const villager of state.villagers) {
+    const rng = seededRandom({
+      villageSeed: state.villageSeed,
+      day,
+      system: 'vote',
+      entity: `${topic}::${villager.villagerId}`,
+    });
+    const pick = weightedPick(
+      options,
+      options.map(() => 1),
+      rng,
+    );
+    tally[pick] = (tally[pick] ?? 0) + 1;
+  }
+
+  let winner = options[0] as string;
+  for (const option of options) {
+    if ((tally[option] ?? 0) > (tally[winner] ?? 0)) {
+      winner = option;
+    }
+  }
+
+  const chronicle = appendChronicle(state.chronicle, {
+    minute: state.clock.minute,
+    kind: 'vote',
+    text: `The village voted on "${topic}": "${winner}" won with ${tally[winner]} of ${state.villagers.length} votes.`,
+    actors: [],
+    importance: 3,
+    public: true,
+  });
+
+  return {
+    state: { ...state, chronicle },
+    events: [{ kind: 'VoteResolved', topic, winner, tally }],
   };
 }

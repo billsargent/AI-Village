@@ -213,3 +213,51 @@ describe('apply PostOnBoard', () => {
     );
   });
 });
+
+describe('apply CallVote', () => {
+  it('tallies one vote per villager and picks the winner with the most', () => {
+    const village = villageWithTwo();
+    const { state, events } = apply(village, {
+      kind: 'CallVote',
+      topic: 'Paint the footbridge?',
+      options: ['yes', 'no'],
+    });
+
+    const event = events[0];
+    expect(event?.kind).toBe('VoteResolved');
+    if (event?.kind !== 'VoteResolved') throw new Error('unreachable');
+    const yesVotes = event.tally.yes ?? 0;
+    const noVotes = event.tally.no ?? 0;
+    expect(yesVotes + noVotes).toBe(2);
+    expect(event.winner).toBe(yesVotes >= noVotes ? 'yes' : 'no');
+    expect(state.chronicle.at(-1)).toMatchObject({ kind: 'vote', public: true });
+  });
+
+  it('is deterministic for a given seed and day', () => {
+    const village = villageWithTwo();
+    const a = apply(village, { kind: 'CallVote', topic: 'Name the boat', options: ['a', 'b'] });
+    const b = apply(village, { kind: 'CallVote', topic: 'Name the boat', options: ['a', 'b'] });
+    expect(a.events).toEqual(b.events);
+  });
+
+  it('rejects fewer than two options', () => {
+    const village = villageWithTwo();
+    expect(() => apply(village, { kind: 'CallVote', topic: 'x', options: ['only'] })).toThrow(
+      CommandError,
+    );
+  });
+
+  it('rejects duplicate options', () => {
+    const village = villageWithTwo();
+    expect(() => apply(village, { kind: 'CallVote', topic: 'x', options: ['yes', 'yes'] })).toThrow(
+      CommandError,
+    );
+  });
+
+  it('rejects a vote with nobody to vote', () => {
+    const village = createVillage(1);
+    expect(() => apply(village, { kind: 'CallVote', topic: 'x', options: ['yes', 'no'] })).toThrow(
+      CommandError,
+    );
+  });
+});

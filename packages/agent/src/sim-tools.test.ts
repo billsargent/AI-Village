@@ -2,6 +2,7 @@ import { createVillage, getBalance, type Order, type VillageState } from '@ai-vi
 import { describe, expect, it } from 'vitest';
 import {
   ACCEPT_ORDER_TOOL,
+  CALL_VOTE_TOOL,
   DECLINE_ORDER_TOOL,
   GIFT_TOOL,
   POST_ON_BOARD_TOOL,
@@ -147,10 +148,43 @@ describe('POST_ON_BOARD_TOOL', () => {
   });
 });
 
+describe('CALL_VOTE_TOOL', () => {
+  it('runs the CallVote command against the sim state', () => {
+    const village = createVillage(1, {
+      villagers: [
+        { villagerId: 'ada', tradeId: 'farmer', skillLevel: 1, hasTool: false, moodFactor: 1 },
+      ],
+    });
+    const args = CALL_VOTE_TOOL.args.parse({ topic: 'Name the boat', options: ['Swift', 'Merry'] });
+    const result = CALL_VOTE_TOOL.run?.(args, { state: village }) as {
+      state: typeof village;
+      events: { kind: string; winner: string }[];
+    };
+
+    expect(result.events[0]?.kind).toBe('VoteResolved');
+    expect(['Swift', 'Merry']).toContain(result.events[0]?.winner);
+  });
+
+  it('is a risk-none game action granted to the Mayor role', () => {
+    expect(CALL_VOTE_TOOL.kind).toBe('game');
+    expect(CALL_VOTE_TOOL.risk).toBe('none');
+    const registry = new ToolRegistry();
+    registry.register(CALL_VOTE_TOOL);
+    expect(resolveVillagerTools(registry, 'mayor', [])).toEqual(['call_vote']);
+  });
+});
+
 describe('SIM_TOOLS', () => {
   it('contains every sim tool with unique ids', () => {
     expect(new Set(SIM_TOOLS.map((tool) => tool.id))).toEqual(
-      new Set(['gift', 'propose_building', 'accept_order', 'decline_order', 'post_on_board']),
+      new Set([
+        'gift',
+        'propose_building',
+        'accept_order',
+        'decline_order',
+        'post_on_board',
+        'call_vote',
+      ]),
     );
   });
 });
