@@ -121,3 +121,14 @@
   (anvil, forge, altar, millstones, loom, pews) is still a gap -
   deferred to hand-made Aseprite work, same as spec section 10 already
   planned for missing buildings.
+- A real PixiJS canvas drawing the village from the vendored art at its
+  real plot positions: `content/sprites.ts` picks specific pixel
+  rectangles within the art/src sheets for the grass tile, two
+  buildings (town-hall, cottage) and one villager pose; `VillageCanvas`
+  loads and crops them with nearest-neighbour scaling, no smoothing.
+  `apps/server`'s bootstrap village now seeds a small real starting
+  scenario (a Mayor at the town hall, a farmer, a cottage, the clock set
+  to a work-stint hour) so there's something real to render. Verified
+  with a real headless-Chromium screenshot of the running dev servers.
+  Left over: sprites for the rest of `BUILDINGS`, and a real scrollable
+  camera once there's an actual Tiled map (#112).
