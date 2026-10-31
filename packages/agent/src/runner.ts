@@ -7,10 +7,17 @@ import {
   type ApprovalsInbox,
   type TurnState,
 } from './approvals.js';
-import { renderFacts, type FactsSnapshot } from './facts.js';
+import type { FactsSnapshot } from './facts.js';
 import { appendMeterRecord, type Meter, type MeterRecord } from './meter.js';
 import { modelSettingsFor } from './models.js';
+import { buildPromptMessages, type PromptOptions, type VillagerCard } from './prompt.js';
 import type { ToolDefinition, ToolRunContext } from './tools.js';
+
+/** The slots of the prompt layout a caller supplies, besides the villager/facts/request (spec section 11). */
+export type PromptExtras = Pick<
+  PromptOptions,
+  'memoriesText' | 'peopleHereText' | 'olderSummary' | 'history'
+>;
 
 /**
  * What `runChat`/`runTurn` need from a model client - matches
@@ -30,26 +37,16 @@ export interface ModelClient {
   ): Promise<ChatCompletionResult>;
 }
 
-export interface VillagerCard {
-  id: string;
-  tradeId: string;
-}
-
-/** Spec section 11's charter rules, trimmed to what a one-line chat turn needs. */
-export const CHARTER_LINE =
-  'Answer the question first, in one sentence. Use 1-3 sentences unless asked for more. ' +
-  'Plain words, no proverbs or riddles. Never invent facts about the village - if unsure, say so.';
-
 export interface RunChatResult {
   reply: string;
   meter: Meter;
 }
 
 /**
- * Runs one chat turn: a static charter line, the facts block, and the
- * request, sent to the chat purpose's model. Records a meter entry.
- * Pricing is 0 for now - the cost table lands with the cost/budget work
- * (spec section 16), not here.
+ * Runs one chat turn: the full prompt layout (spec section 11) ending
+ * with the request, sent to the chat purpose's model. Records a meter
+ * entry. Pricing is 0 for now - the cost table lands with the
+ * cost/budget work (spec section 16), not here.
  */
 export async function runChat(
   client: ModelClient,
@@ -57,14 +54,11 @@ export async function runChat(
   villager: VillagerCard,
   request: string,
   meter: Meter = [],
+  promptExtras: PromptExtras = {},
 ): Promise<RunChatResult> {
   const settings = modelSettingsFor('chat');
 
-  const messages: ChatMessage[] = [
-    { role: 'system', content: CHARTER_LINE },
-    { role: 'system', content: renderFacts(facts) },
-    { role: 'user', content: request },
-  ];
+  const messages = buildPromptMessages({ villager, facts, request, ...promptExtras });
 
   const startedAt = Date.now();
   const result = await client.chatCompletion(messages, {
@@ -137,15 +131,12 @@ export async function runTurn(
   request: string,
   ctx: TurnContext,
   meter: Meter = [],
+  promptExtras: PromptExtras = {},
 ): Promise<RunTurnResult> {
   const settings = modelSettingsFor('chat');
   const toolSchemas = ctx.tools.map(toToolSchema);
 
-  const messages: ChatMessage[] = [
-    { role: 'system', content: CHARTER_LINE },
-    { role: 'system', content: renderFacts(facts) },
-    { role: 'user', content: request },
-  ];
+  const messages = buildPromptMessages({ villager, facts, request, ...promptExtras });
 
   let state = ctx.state;
   let currentMeter = meter;

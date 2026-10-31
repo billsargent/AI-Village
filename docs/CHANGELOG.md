@@ -58,3 +58,9 @@
   queued, with a rendered preview, instead of just reported and dropped.
   Approving a queued request runs the tool now, against the current
   state - declining just records the decision (#92).
+- The full prompt layout (spec section 11): a static charter, the
+  village-wide and a Mayor-specific playbook, the villager card, the
+  facts block, and real conversation history (an optional last-10
+  messages plus an older-turns summary). Memories/promises and "who
+  else is here" are left as pre-rendered slots for the modules that
+  will produce them (#94).

@@ -10,4 +10,5 @@ export * from './sim-tools.js';
 export * from './approvals.js';
 export * from './models.js';
 export * from './meter.js';
+export * from './prompt.js';
 export * from './runner.js';
