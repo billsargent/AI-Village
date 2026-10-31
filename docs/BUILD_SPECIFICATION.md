@@ -754,14 +754,15 @@ Use one consistent 16 px top-down style from CC0 packs. Fill the gaps with hand-
 
 ### Sources and licences
 
-| Source                                              | Licence                   | Used for                                                                                             |
-| --------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Ninja Adventure asset pack                          | CC0                       | Water, characters, props, icons, sounds; it also has mill sails, a watermill and a boat              |
-| Serene Village Revamped (LimeZu)                    | CC-BY 4.0 (credit LimeZu) | Base terrain and village buildings/houses, including animated objects (campfire, doors)              |
-| Kenney packs (Tiny Town, RPG Urban, UI Pack)        | CC0                       | Extra props and UI frames                                                                            |
-| Hand-made in Aseprite                               | The project's own         | Missing buildings (clocktower, chapel bell, smokehouse), trade work animations, festival decorations |
-| Pixelify Sans, Atkinson Hyperlegible (Google Fonts) | SIL Open Font Licence     | Pixel titles; readable long text                                                                     |
-| OpenGameArt, Freesound                              | CC0 only                  | Ambient loops and sound effects                                                                      |
+| Source                                              | Licence                   | Used for                                                                                                                                                                     |
+| --------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ninja Adventure asset pack                          | CC0                       | Water, characters, props, icons, sounds; it also has mill sails, a watermill and a boat                                                                                      |
+| Serene Village Revamped (LimeZu)                    | CC-BY 4.0 (credit LimeZu) | Base terrain and village buildings/houses, including animated objects (campfire, doors)                                                                                      |
+| Serene Village, original (LimeZu)                   | CC-BY 4.0 (credit LimeZu) | Generic interior furniture (beds, table, bookshelf, chairs, chest, rug, plants) - same artist and palette as the Revamped pack above                                         |
+| Kenney packs (Tiny Town, RPG Urban, UI Pack)        | CC0                       | Extra props and UI frames                                                                                                                                                    |
+| Hand-made in Aseprite                               | The project's own         | Missing buildings (clocktower, chapel bell, smokehouse), trade-specific furniture (anvil, forge, altar, millstones, loom, pews), trade work animations, festival decorations |
+| Pixelify Sans, Atkinson Hyperlegible (Google Fonts) | SIL Open Font Licence     | Pixel titles; readable long text                                                                                                                                             |
+| OpenGameArt, Freesound                              | CC0 only                  | Ambient loops and sound effects                                                                                                                                              |
 
 - Serene Village Revamped's buildings and Ninja Adventure's characters are drawn by different artists; expect a palette/style pass to bring them in line with the one master palette below, rather than assuming they match out of the box.
 - Before adding a pack, check its licence allows redistribution in a public repository and use in an AI project. Packs with no-redistribution or no-AI clauses are out - this ruled out LimeZu's companion "Modern Interiors" pack (its EULA forbids redistribution), which is why characters stay with Ninja Adventure instead.
