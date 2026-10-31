@@ -58,6 +58,25 @@ describe('runChat', () => {
     expect(messages.some((m) => m.content === 'Any flour?')).toBe(true);
   });
 
+  it('threads promptExtras (memories, people here, older-turns summary) into the prompt', async () => {
+    const { client, sentMessages } = scriptedClient('ok');
+    const village = createVillage(1);
+    const snapshot = facts(village, 'owner', 'chat');
+
+    await runChat(client, snapshot, { id: 'ada', tradeId: 'farmer' }, 'Hi', [], {
+      memoriesText: 'Diary: a quiet day.',
+      peopleHereText: 'Tobin: friend.',
+      olderSummary: 'We discussed the harvest.',
+    });
+
+    const messages = sentMessages[0] as { role: string; content: string }[];
+    expect(messages.some((m) => m.content === 'Diary: a quiet day.')).toBe(true);
+    expect(messages.some((m) => m.content === 'Tobin: friend.')).toBe(true);
+    expect(
+      messages.some((m) => m.content === 'Earlier in this conversation: We discussed the harvest.'),
+    ).toBe(true);
+  });
+
   it('appends a meter record with the villager, purpose and token usage', async () => {
     const { client } = scriptedClient('A short reply.');
     const village = createVillage(1);
