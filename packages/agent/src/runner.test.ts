@@ -3,6 +3,7 @@ import { createVillage, getBalance } from '@ai-village/sim';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createApprovalsInbox } from './approvals.js';
+import { defaultBudgetSettings, type BudgetSettings } from './budget.js';
 import { facts } from './facts.js';
 import { runChat, runTurn, type ModelClient, type TurnContext } from './runner.js';
 import { GIFT_TOOL } from './sim-tools.js';
@@ -99,6 +100,74 @@ describe('runChat', () => {
     });
   });
 
+  it("records the call's real $ cost from the model's price, not 0", async () => {
+    const { client } = scriptedClient('A short reply.');
+    const village = createVillage(1);
+    const snapshot = facts(village, 'owner', 'chat');
+
+    const result = await runChat(client, snapshot, { id: 'ada', tradeId: 'farmer' }, 'Hi');
+
+    expect(result.meter[0]?.costUsd).toBeGreaterThan(0);
+  });
+
+  it("never blocks the owner's own chat on the monthly ceiling, even at $0", async () => {
+    const { client } = scriptedClient('ok');
+    const village = createVillage(1);
+    const snapshot = facts(village, 'owner', 'chat');
+    const budgetSettings: BudgetSettings = defaultBudgetSettings(0);
+
+    const result = await runChat(
+      client,
+      snapshot,
+      { id: 'ada', tradeId: 'farmer' },
+      'Hi',
+      [],
+      {},
+      budgetSettings,
+    );
+
+    expect(result.budgetExceeded).toBeUndefined();
+    expect(result.reply).toBe('ok');
+  });
+
+  it('blocks a call when the per-villager-per-day cap is already spent, without calling the model', async () => {
+    const { client, sentMessages } = scriptedClient('should not be called');
+    const village = createVillage(1);
+    const snapshot = facts(village, 'owner', 'chat');
+    const priorMeter = [
+      {
+        at: Date.now(),
+        purpose: 'chat',
+        villagerId: 'ada',
+        model: 'deepseek-chat',
+        tokensIn: 0,
+        tokensCached: 0,
+        tokensOut: 0,
+        tokensReasoning: 0,
+        costUsd: 10,
+        ms: 0,
+      },
+    ];
+    const budgetSettings: BudgetSettings = {
+      ...defaultBudgetSettings(1000),
+      perVillagerPerDayUsd: 1,
+    };
+
+    const result = await runChat(
+      client,
+      snapshot,
+      { id: 'ada', tradeId: 'farmer' },
+      'Hi',
+      priorMeter,
+      {},
+      budgetSettings,
+    );
+
+    expect(result.budgetExceeded).toBe('per-villager-per-day');
+    expect(result.reply).toBe('');
+    expect(sentMessages).toHaveLength(0);
+  });
+
   it('appends to an existing meter rather than replacing it', async () => {
     const { client } = scriptedClient('ok');
     const village = createVillage(1);
@@ -178,6 +247,51 @@ describe('runTurn', () => {
       { kind: 'GiftGiven', from: 'ada', to: 'tobin', item: 'bread', qty: 1 },
     ]);
     expect(result.meter).toHaveLength(2);
+  });
+
+  it('blocks a step when the per-villager-per-day cap is already spent, without calling the model', async () => {
+    const village = villageWithGiftableStock();
+    const { client, sentMessages } = sequentialClient([{ text: 'should not be called' }]);
+    const ctx: TurnContext = {
+      state: village,
+      tools: [],
+      turn: { tainted: false },
+      sessionApprovedToolIds: new Set(),
+      inbox: createApprovalsInbox(),
+    };
+    const priorMeter = [
+      {
+        at: Date.now(),
+        purpose: 'chat',
+        villagerId: 'ada',
+        model: 'deepseek-chat',
+        tokensIn: 0,
+        tokensCached: 0,
+        tokensOut: 0,
+        tokensReasoning: 0,
+        costUsd: 10,
+        ms: 0,
+      },
+    ];
+    const budgetSettings: BudgetSettings = {
+      ...defaultBudgetSettings(1000),
+      perVillagerPerDayUsd: 1,
+    };
+
+    const result = await runTurn(
+      client,
+      facts(village, 'owner', 'chat'),
+      { id: 'ada', tradeId: 'farmer' },
+      'Hi',
+      ctx,
+      priorMeter,
+      {},
+      budgetSettings,
+    );
+
+    expect(result.budgetExceeded).toBe('per-villager-per-day');
+    expect(result.reply).toBe('');
+    expect(sentMessages).toHaveLength(0);
   });
 
   it('stops and reports a tool call that needs approval, without running it', async () => {

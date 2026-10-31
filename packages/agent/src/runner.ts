@@ -7,11 +7,15 @@ import {
   type ApprovalsInbox,
   type TurnState,
 } from './approvals.js';
+import { checkBudget, type BudgetCheck, type BudgetSettings } from './budget.js';
 import type { FactsSnapshot } from './facts.js';
-import { appendMeterRecord, type Meter, type MeterRecord } from './meter.js';
+import { appendMeterRecord, computeCostUsd, type Meter, type MeterRecord } from './meter.js';
 import { modelSettingsFor } from './models.js';
 import { buildPromptMessages, type PromptOptions, type VillagerCard } from './prompt.js';
 import type { ToolDefinition, ToolRunContext } from './tools.js';
+
+/** Why a call was skipped instead of made (spec section 16). */
+export type BudgetExceededReason = Extract<BudgetCheck, { ok: false }>['reason'];
 
 /** The slots of the prompt layout a caller supplies, besides the villager/facts/request (spec section 11). */
 export type PromptExtras = Pick<
@@ -40,13 +44,16 @@ export interface ModelClient {
 export interface RunChatResult {
   reply: string;
   meter: Meter;
+  /** Set instead of calling the model, when `budgetSettings` blocks this call (spec section 16). */
+  budgetExceeded?: BudgetExceededReason;
 }
 
 /**
  * Runs one chat turn: the full prompt layout (spec section 11) ending
  * with the request, sent to the chat purpose's model. Records a meter
- * entry. Pricing is 0 for now - the cost table lands with the
- * cost/budget work (spec section 16), not here.
+ * entry with its real $ cost. When `budgetSettings` is given and the
+ * call would exceed it, the model is never called - see `checkBudget`
+ * for what's actually enforced today.
  */
 export async function runChat(
   client: ModelClient,
@@ -55,8 +62,16 @@ export async function runChat(
   request: string,
   meter: Meter = [],
   promptExtras: PromptExtras = {},
+  budgetSettings?: BudgetSettings,
 ): Promise<RunChatResult> {
   const settings = modelSettingsFor('chat');
+
+  if (budgetSettings) {
+    const budget = checkBudget(meter, budgetSettings, 'chat', villager.id, Date.now());
+    if (!budget.ok) {
+      return { reply: '', meter, budgetExceeded: budget.reason };
+    }
+  }
 
   const messages = buildPromptMessages({ villager, facts, request, ...promptExtras });
 
@@ -76,7 +91,13 @@ export async function runChat(
     tokensCached: 0,
     tokensOut: result.usage.completionTokens,
     tokensReasoning: 0,
-    costUsd: 0,
+    costUsd: computeCostUsd(
+      settings.model,
+      result.usage.promptTokens,
+      0,
+      result.usage.completionTokens,
+      0,
+    ),
     ms,
   };
 
@@ -114,6 +135,8 @@ export interface RunTurnResult {
   inbox: ApprovalsInbox;
   /** Set if the model never settled on a final reply within the purpose's maxSteps. */
   ranOutOfSteps?: boolean;
+  /** Set when `budgetSettings` blocks a step instead of calling the model (spec section 16). */
+  budgetExceeded?: BudgetExceededReason;
 }
 
 /**
@@ -132,6 +155,7 @@ export async function runTurn(
   ctx: TurnContext,
   meter: Meter = [],
   promptExtras: PromptExtras = {},
+  budgetSettings?: BudgetSettings,
 ): Promise<RunTurnResult> {
   const settings = modelSettingsFor('chat');
   const toolSchemas = ctx.tools.map(toToolSchema);
@@ -144,6 +168,20 @@ export async function runTurn(
   const events: DomainEvent[] = [];
 
   for (let step = 0; step < settings.maxSteps; step++) {
+    if (budgetSettings) {
+      const budget = checkBudget(currentMeter, budgetSettings, 'chat', villager.id, Date.now());
+      if (!budget.ok) {
+        return {
+          reply: '',
+          meter: currentMeter,
+          state,
+          events,
+          inbox: currentInbox,
+          budgetExceeded: budget.reason,
+        };
+      }
+    }
+
     const startedAt = Date.now();
     const result = await client.chatCompletion(messages, {
       model: settings.model,
@@ -161,7 +199,13 @@ export async function runTurn(
       tokensCached: 0,
       tokensOut: result.usage.completionTokens,
       tokensReasoning: 0,
-      costUsd: 0,
+      costUsd: computeCostUsd(
+        settings.model,
+        result.usage.promptTokens,
+        0,
+        result.usage.completionTokens,
+        0,
+      ),
       ms,
     });
 

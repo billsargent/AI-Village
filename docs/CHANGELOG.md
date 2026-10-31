@@ -70,3 +70,10 @@
   `memoriesText` prompt slot with the top memories and open promises.
   The diary layer is left out - the sim only advances by whole days,
   not hours, so an hourly diary isn't meaningfully buildable yet (#96).
+- Real model pricing (`content/prices.ts`) wired into the meter, so
+  `costUsd` is a real $ figure instead of 0, plus a budget check (the
+  monthly ceiling - never applied to the owner's own chat - and an
+  off-by-default per-villager-per-day cap) gating `runChat`/`runTurn`
+  before a call is made. The daily soft budget, chatter share and
+  per-work-session ask each gate purposes that aren't built yet, so
+  there's nothing real to enforce for them (#98).

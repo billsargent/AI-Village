@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appendMeterRecord, totalCostUsd, type Meter } from './meter.js';
+import { appendMeterRecord, computeCostUsd, costSince, totalCostUsd, type Meter } from './meter.js';
 
 const RECORD = {
   at: 0,
@@ -32,5 +32,33 @@ describe('totalCostUsd', () => {
 
   it('is 0 for an empty meter', () => {
     expect(totalCostUsd([])).toBe(0);
+  });
+});
+
+describe('costSince', () => {
+  it('only sums records at or after the given time', () => {
+    const meter: Meter = [
+      { ...RECORD, at: 100, costUsd: 0.001 },
+      { ...RECORD, at: 200, costUsd: 0.002 },
+      { ...RECORD, at: 300, costUsd: 0.004 },
+    ];
+    expect(costSince(meter, 200)).toBeCloseTo(0.006, 6);
+    expect(costSince(meter, 1000)).toBe(0);
+  });
+});
+
+describe('computeCostUsd', () => {
+  it('prices input, cached-input and output/reasoning tokens by their own rate', () => {
+    const cost = computeCostUsd('deepseek-chat', 1_000_000, 1_000_000, 500_000, 500_000);
+    // deepseek-chat: $0.28/$0.028/$0.42 per million (input/cached/output).
+    expect(cost).toBeCloseTo(0.28 + 0.028 + 0.42, 6);
+  });
+
+  it('is 0 for a model with no price on file', () => {
+    expect(computeCostUsd('nonexistent-model', 1000, 0, 100, 0)).toBe(0);
+  });
+
+  it('is 0 for zero tokens', () => {
+    expect(computeCostUsd('deepseek-chat', 0, 0, 0, 0)).toBe(0);
   });
 });
