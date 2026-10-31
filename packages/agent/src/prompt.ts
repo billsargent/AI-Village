@@ -10,6 +10,7 @@
 
 import { getRole, type RoleId } from '@ai-village/content';
 import type { ChatMessage } from '@ai-village/integrations';
+import { MINUTES_PER_DAY, type Memory, type VillagerPromise } from '@ai-village/sim';
 import { renderFacts, type FactsSnapshot } from './facts.js';
 
 /** Spec section 11's charter rules: what the village is, the honesty rule, how to talk. */
@@ -75,6 +76,37 @@ export function renderVillagerCard(card: VillagerCard): string {
   }
   const roleName = getRole(role)?.title ?? role;
   return `You are ${card.id}, the ${roleName} (also a ${card.tradeId}).`;
+}
+
+/**
+ * Renders section 6 of the prompt layout - the villager's top memories
+ * and open promises - for the `memoriesText` slot below. Null when
+ * there's nothing to show, so the slot is omitted rather than sent as
+ * an empty block.
+ */
+export function renderMemoriesBlock(
+  topMemories: readonly Memory[],
+  openPromises: readonly VillagerPromise[],
+  nowMinute: number,
+): string | null {
+  const lines: string[] = [];
+
+  if (topMemories.length > 0) {
+    lines.push('Your memories:');
+    for (const memory of topMemories) {
+      lines.push(`- ${memory.text}${memory.about ? ` (about ${memory.about})` : ''}`);
+    }
+  }
+
+  if (openPromises.length > 0) {
+    lines.push('Your open promises:');
+    for (const promise of openPromises) {
+      const daysLeft = Math.ceil((promise.dueMinute - nowMinute) / MINUTES_PER_DAY);
+      lines.push(`- ${promise.text} (due in ${daysLeft} day${daysLeft === 1 ? '' : 's'})`);
+    }
+  }
+
+  return lines.length > 0 ? lines.join('\n') : null;
 }
 
 export interface PromptOptions {

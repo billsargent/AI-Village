@@ -261,3 +261,185 @@ describe('apply CallVote', () => {
     );
   });
 });
+
+describe('apply Remember', () => {
+  it('adds a memory for the villager', () => {
+    const village = villageWithTwo();
+    const { state, events } = apply(village, {
+      kind: 'Remember',
+      villagerId: 'ada',
+      text: 'Met Tobin at the market.',
+      importance: 6,
+    });
+
+    expect(state.memory.memories).toEqual([
+      {
+        id: 1,
+        villagerId: 'ada',
+        minute: 0,
+        text: 'Met Tobin at the market.',
+        importance: 6,
+        about: null,
+        lastRecalledMinute: null,
+      },
+    ]);
+    expect(events).toEqual([{ kind: 'Remembered', memoryId: 1 }]);
+  });
+
+  it('tags a memory about the owner', () => {
+    const village = villageWithTwo();
+    const { state } = apply(village, {
+      kind: 'Remember',
+      villagerId: 'ada',
+      text: 'The owner likes honey.',
+      importance: 4,
+      about: 'owner',
+    });
+    expect(state.memory.memories[0]?.about).toBe('owner');
+  });
+
+  it('rejects an unknown villager', () => {
+    const village = villageWithTwo();
+    expect(() =>
+      apply(village, { kind: 'Remember', villagerId: 'nobody', text: 'x', importance: 5 }),
+    ).toThrow(CommandError);
+  });
+
+  it('rejects an empty memory', () => {
+    const village = villageWithTwo();
+    expect(() =>
+      apply(village, { kind: 'Remember', villagerId: 'ada', text: '  ', importance: 5 }),
+    ).toThrow(CommandError);
+  });
+});
+
+describe('apply MakePromise / DecidePromise', () => {
+  it('records an open promise due in the given number of days', () => {
+    const village = villageWithTwo();
+    const { state, events } = apply(village, {
+      kind: 'MakePromise',
+      villagerId: 'ada',
+      text: 'Finish the fence',
+      dueInDays: 5,
+    });
+
+    expect(state.promises.promises).toEqual([
+      {
+        id: 1,
+        villagerId: 'ada',
+        text: 'Finish the fence',
+        createdMinute: 0,
+        dueMinute: 5 * 24 * 60,
+        status: 'open',
+      },
+    ]);
+    expect(events).toEqual([{ kind: 'PromiseMade', promiseId: 1 }]);
+  });
+
+  it('appends a public chronicle entry', () => {
+    const village = villageWithTwo();
+    const { state } = apply(village, {
+      kind: 'MakePromise',
+      villagerId: 'ada',
+      text: 'Finish the fence',
+      dueInDays: 5,
+    });
+    expect(state.chronicle.at(-1)).toMatchObject({ kind: 'promise', public: true });
+  });
+
+  it('rejects an unknown villager', () => {
+    const village = villageWithTwo();
+    expect(() =>
+      apply(village, { kind: 'MakePromise', villagerId: 'nobody', text: 'x', dueInDays: 1 }),
+    ).toThrow(CommandError);
+  });
+
+  it('rejects a non-positive due day', () => {
+    const village = villageWithTwo();
+    expect(() =>
+      apply(village, { kind: 'MakePromise', villagerId: 'ada', text: 'x', dueInDays: 0 }),
+    ).toThrow(CommandError);
+  });
+
+  it('decides a promise kept or released', () => {
+    let village = villageWithTwo();
+    village = apply(village, {
+      kind: 'MakePromise',
+      villagerId: 'ada',
+      text: 'Finish the fence',
+      dueInDays: 5,
+    }).state;
+
+    const { state, events } = apply(village, {
+      kind: 'DecidePromise',
+      promiseId: 1,
+      decision: 'kept',
+    });
+
+    expect(state.promises.promises[0]?.status).toBe('kept');
+    expect(events).toEqual([{ kind: 'PromiseDecided', promiseId: 1, decision: 'kept' }]);
+  });
+
+  it('rejects an unknown promise', () => {
+    const village = villageWithTwo();
+    expect(() =>
+      apply(village, { kind: 'DecidePromise', promiseId: 99, decision: 'kept' }),
+    ).toThrow(CommandError);
+  });
+
+  it('rejects deciding a promise that is not open', () => {
+    let village = villageWithTwo();
+    village = apply(village, {
+      kind: 'MakePromise',
+      villagerId: 'ada',
+      text: 'Finish the fence',
+      dueInDays: 5,
+    }).state;
+    village = apply(village, { kind: 'DecidePromise', promiseId: 1, decision: 'kept' }).state;
+
+    expect(() =>
+      apply(village, { kind: 'DecidePromise', promiseId: 1, decision: 'released' }),
+    ).toThrow(CommandError);
+  });
+});
+
+describe('apply ThankVillager', () => {
+  it("lifts the villager's fun and records a memory about the owner", () => {
+    const village = villageWithTwo();
+    const lowFun: VillageState = {
+      ...village,
+      villagerNeeds: {
+        ...village.villagerNeeds,
+        ada: { ...village.villagerNeeds['ada'], fun: 50 } as VillageState['villagerNeeds'][string],
+      },
+    };
+    const { state, events } = apply(lowFun, { kind: 'ThankVillager', villagerId: 'ada' });
+
+    expect(state.villagerNeeds['ada']?.fun).toBe(70);
+    expect(state.memory.memories).toEqual([
+      {
+        id: 1,
+        villagerId: 'ada',
+        minute: 0,
+        text: 'The owner thanked me.',
+        importance: 5,
+        about: 'owner',
+        lastRecalledMinute: null,
+      },
+    ]);
+    expect(events).toEqual([{ kind: 'VillagerThanked', villagerId: 'ada', memoryId: 1 }]);
+  });
+
+  it('caps fun at the maximum', () => {
+    const village = villageWithTwo();
+    const { state } = apply(village, { kind: 'ThankVillager', villagerId: 'ada' });
+    expect(state.villagerNeeds['ada']?.fun).toBeLessThanOrEqual(100);
+  });
+
+  it('rejects an unknown villager', () => {
+    const village = villageWithTwo();
+    expect(() => apply(village, { kind: 'ThankVillager', villagerId: 'nobody' })).toThrow(
+      CommandError,
+    );
+  });
+});

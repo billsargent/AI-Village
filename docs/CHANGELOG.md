@@ -64,3 +64,9 @@
   messages plus an older-turns summary). Memories/promises and "who
   else is here" are left as pre-rendered slots for the modules that
   will produce them (#94).
+- Villager memory and promises (spec sections 7 and 15): the `remember`
+  and `promise` tools, an owner-side `DecidePromise` and `ThankVillager`
+  (mood lift + an auto-recorded memory), and a renderer feeding #94's
+  `memoriesText` prompt slot with the top memories and open promises.
+  The diary layer is left out - the sim only advances by whole days,
+  not hours, so an hourly diary isn't meaningfully buildable yet (#96).

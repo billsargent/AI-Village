@@ -9,7 +9,7 @@ import {
   openAndMigrate,
   saveVillage,
 } from '@ai-village/db';
-import { runVillageDays } from '@ai-village/sim';
+import { apply, runVillageDays } from '@ai-village/sim';
 import { afterEach, describe, expect, it } from 'vitest';
 import { fromSnapshot, toSnapshot } from './village-persistence.js';
 
@@ -35,7 +35,7 @@ afterEach(() => {
 
 describe('village persistence round trip', () => {
   it('survives save and reload after running a headless village for 30 days', async () => {
-    const { state } = runVillageDays(42, 30, {
+    const { state: ranState } = runVillageDays(42, 30, {
       villagers: [
         {
           villagerId: 'mayor',
@@ -51,6 +51,19 @@ describe('village persistence round trip', () => {
       builtBuildingIds: ['town-hall', 'inn', 'fields', 'fields'],
       startingStock: [{ account: 'treasury', item: 'coins', qty: 2000 }],
     });
+
+    const remembered = apply(ranState, {
+      kind: 'Remember',
+      villagerId: 'ada',
+      text: 'Met Tobin at the market.',
+      importance: 6,
+    }).state;
+    const state = apply(remembered, {
+      kind: 'MakePromise',
+      villagerId: 'ada',
+      text: 'Finish the fence',
+      dueInDays: 5,
+    }).state;
 
     tempDir = mkdtempSync(join(tmpdir(), 'ai-village-persistence-test-'));
     const { db, client } = await openAndMigrate(
@@ -78,5 +91,7 @@ describe('village persistence round trip', () => {
     expect(reloaded.villagerNeeds).toEqual(state.villagerNeeds);
     expect(reloaded.builtBuildingIds).toEqual(state.builtBuildingIds);
     expect(reloaded.villagers).toEqual(state.villagers);
+    expect(reloaded.memory.memories).toEqual(state.memory.memories);
+    expect(reloaded.promises.promises).toEqual(state.promises.promises);
   });
 });

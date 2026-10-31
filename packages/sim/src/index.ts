@@ -19,5 +19,7 @@ export * from './relationships.js';
 export * from './storyteller.js';
 export * from './orders.js';
 export * from './board.js';
+export * from './memory.js';
+export * from './promises.js';
 export * from './systems.js';
 export * from './commands.js';

@@ -99,6 +99,25 @@ export const board = sqliteTable('board', {
   postedDay: integer('posted_day').notNull(),
 });
 
+export const memories = sqliteTable('memories', {
+  id: integer('id').primaryKey(),
+  villagerId: text('villager_id').notNull(),
+  minute: real('minute').notNull(),
+  text: text('text').notNull(),
+  importance: integer('importance').notNull(),
+  about: text('about'),
+  lastRecalledMinute: real('last_recalled_minute'),
+});
+
+export const promises = sqliteTable('promises', {
+  id: integer('id').primaryKey(),
+  villagerId: text('villager_id').notNull(),
+  text: text('text').notNull(),
+  createdMinute: real('created_minute').notNull(),
+  dueMinute: real('due_minute').notNull(),
+  status: text('status').notNull(),
+});
+
 export const chronicle = sqliteTable('chronicle', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   minute: real('minute').notNull(),

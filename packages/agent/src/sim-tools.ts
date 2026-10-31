@@ -1,10 +1,10 @@
 /**
  * The tool registry's real, runnable tools (spec section 12's roles
- * table: Villager gets "gift" and "post on the board"; Mayor gets
- * "propose building", "accept orders" and "call a meeting or vote"),
- * now that `apply(command)` exists for each (#68, #84, #86, #90). All
- * are game actions - risk none, never needing approval - so they run
- * straight against the sim through `apply()`.
+ * table: Villager gets "gift", "post on the board", `remember` and
+ * `promise`; Mayor gets "propose building", "accept orders" and "call a
+ * meeting or vote"), now that `apply(command)` exists for each (#68,
+ * #84, #86, #90, #96). All are game actions - risk none, never needing
+ * approval - so they run straight against the sim through `apply()`.
  */
 
 import { apply } from '@ai-village/sim';
@@ -100,6 +100,46 @@ export const CALL_VOTE_TOOL = defineTool({
   run: (args, ctx) => apply(ctx.state, { kind: 'CallVote', ...args }),
 });
 
+export const REMEMBER_TOOL = defineTool({
+  id: 'remember',
+  title: 'Remember something',
+  kind: 'game',
+  risk: 'none',
+  approval: 'never',
+  roles: ['villager'],
+  purposes: ['chat'],
+  costUsd: 0,
+  args: z.object({
+    villagerId: z.string(),
+    text: z.string(),
+    importance: z.number().min(1).max(10),
+    about: z.string().optional(),
+  }),
+  preview: (args) => `Remember: "${args.text}"`,
+  run: (args, ctx) =>
+    apply(ctx.state, {
+      kind: 'Remember',
+      villagerId: args.villagerId,
+      text: args.text,
+      importance: args.importance,
+      ...(args.about !== undefined ? { about: args.about } : {}),
+    }),
+});
+
+export const PROMISE_TOOL = defineTool({
+  id: 'promise',
+  title: 'Make a promise',
+  kind: 'game',
+  risk: 'none',
+  approval: 'never',
+  roles: ['villager'],
+  purposes: ['chat'],
+  costUsd: 0,
+  args: z.object({ villagerId: z.string(), text: z.string(), dueInDays: z.number().positive() }),
+  preview: (args) => `Promise: "${args.text}" (due in ${args.dueInDays} days)`,
+  run: (args, ctx) => apply(ctx.state, { kind: 'MakePromise', ...args }),
+});
+
 export const SIM_TOOLS = [
   GIFT_TOOL,
   PROPOSE_BUILDING_TOOL,
@@ -107,4 +147,6 @@ export const SIM_TOOLS = [
   DECLINE_ORDER_TOOL,
   POST_ON_BOARD_TOOL,
   CALL_VOTE_TOOL,
+  REMEMBER_TOOL,
+  PROMISE_TOOL,
 ] as const;

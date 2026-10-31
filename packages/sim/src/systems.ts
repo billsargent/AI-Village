@@ -11,6 +11,7 @@ import {
   recordMovement,
   type LedgerState,
 } from './ledger.js';
+import { createMemoryState, type MemoryState } from './memory.js';
 import {
   applyPurposeForDay,
   createNeeds,
@@ -26,6 +27,7 @@ import {
   maybePostDownriverOrder,
   type OrdersState,
 } from './orders.js';
+import { createPromisesState, type PromisesState } from './promises.js';
 import { runEveningInteractions, type Relationships } from './relationships.js';
 import { pickHappening, type StorytellerStyle } from './storyteller.js';
 import { chargeUpkeep } from './upkeep.js';
@@ -72,6 +74,8 @@ export interface VillageState {
   relationships: Relationships;
   orders: OrdersState;
   board: BoardState;
+  memory: MemoryState;
+  promises: PromisesState;
 }
 
 export interface StartingStock {
@@ -130,6 +134,8 @@ export function createVillage(villageSeed: number, scenario: VillageScenario = {
     relationships: {},
     orders: createOrders(),
     board: createBoard(),
+    memory: createMemoryState(),
+    promises: createPromisesState(),
   };
 }
 
