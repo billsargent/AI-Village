@@ -1,36 +1,6 @@
-import { positionForWorker } from '@ai-village/content';
-import { useVillageFacts, type VillagerFact, type VillageFacts } from './village-api.js';
-
-interface Whereabouts {
-  villager: VillagerFact;
-  x: number;
-  y: number;
-}
-
-/**
- * Who's currently placed at their built workplace, per `positionForWorker`
- * (spec section 8's plot layout). Each trade's workers fill that
- * workplace's plots in order, so two farmers at a one-field village both
- * show at the same plot - there's no per-villager instance assignment
- * yet, so this never guesses which exact field is "theirs".
- */
-function whereaboutsNow(data: VillageFacts): readonly Whereabouts[] {
-  const slotByWorksAt = new Map<string, number>();
-  const whereabouts: Whereabouts[] = [];
-  for (const villager of data.villagers) {
-    const plot = positionForWorker(villager.tradeId, data.builtBuildingIds, data.phase);
-    if (!plot) {
-      continue;
-    }
-    const slot = slotByWorksAt.get(plot.buildingId) ?? 0;
-    const placed = positionForWorker(villager.tradeId, data.builtBuildingIds, data.phase, slot);
-    slotByWorksAt.set(plot.buildingId, slot + 1);
-    if (placed) {
-      whereabouts.push({ villager, x: placed.x, y: placed.y });
-    }
-  }
-  return whereabouts;
-}
+import { useVillageFacts } from './village-api.js';
+import { VillageCanvas } from './VillageCanvas.js';
+import { whereaboutsNow } from './village-draw.js';
 
 export function App() {
   const { data, isPending, isError, error } = useVillageFacts();
@@ -57,6 +27,9 @@ export function App() {
       </p>
       <p>Population: {data.population}</p>
       <p>Treasury: {data.treasuryCoins} coins</p>
+      <div className="mt-2">
+        <VillageCanvas data={data} />
+      </div>
       {data.recentChronicle.length > 0 && (
         <ul className="mt-2 list-disc pl-5">
           {data.recentChronicle.map((entry, index) => (

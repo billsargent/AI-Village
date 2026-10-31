@@ -12,6 +12,7 @@
   "dependencies": {
     "@ai-village/content": "workspace:*",
     "@tanstack/react-query": "^5.105.0",
+    "pixi.js": "^8.22.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },

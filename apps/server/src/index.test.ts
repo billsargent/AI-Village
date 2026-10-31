@@ -10,9 +10,12 @@ describe('GET /api/village', () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body).toMatchObject({
-      population: 0,
-      builtBuildingIds: [],
-      villagers: [],
+      population: 2,
+      builtBuildingIds: ['town-hall', 'cottage'],
+      villagers: [
+        { id: 'hesper', tradeId: 'mayor', role: 'mayor' },
+        { id: 'ada', tradeId: 'farmer', role: 'villager' },
+      ],
     });
   });
 

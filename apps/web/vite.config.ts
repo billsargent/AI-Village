@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
@@ -7,6 +8,9 @@ import { defineConfig } from 'vite';
 // one origin and there's no CORS dance.
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // Serves the repo's art/src (spec section 10) as static files at the
+  // site root, e.g. art/src/tiles/foo.png -> /tiles/foo.png.
+  publicDir: fileURLToPath(new URL('../../art/src', import.meta.url)),
   server: {
     proxy: {
       '/api': 'http://localhost:3000',
