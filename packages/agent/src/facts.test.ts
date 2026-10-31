@@ -23,6 +23,12 @@ describe('facts', () => {
     expect(snapshot.weather).toBe('clear');
   });
 
+  it("reports the day's phase (spec section 5's day shape)", () => {
+    // villageWithStock() starts at minute 0, which is the small hours - night.
+    const snapshot = facts(villageWithStock(), 'owner', 'chat');
+    expect(snapshot.phase).toBe('night');
+  });
+
   it('reports built buildings and treasury', () => {
     const snapshot = facts(villageWithStock(), 'owner', 'chat');
     expect(snapshot.builtBuildingIds).toEqual(['town-hall', 'fields']);
