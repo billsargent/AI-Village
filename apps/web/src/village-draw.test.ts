@@ -36,7 +36,15 @@ describe('builtBuildingsNow', () => {
   });
 
   it('skips a built building with no sprite picked yet', () => {
-    const facts: VillageFacts = { ...BASE_FACTS, builtBuildingIds: ['smithy'] };
+    const facts: VillageFacts = { ...BASE_FACTS, builtBuildingIds: ['clocktower'] };
+    expect(builtBuildingsNow(facts)).toEqual([]);
+  });
+
+  it("skips a building on the Riverside or Forest map - it's not a main-map coordinate", () => {
+    const facts: VillageFacts = {
+      ...BASE_FACTS,
+      builtBuildingIds: ['riverside-jetty', 'smokehouse', 'forest-hut'],
+    };
     expect(builtBuildingsNow(facts)).toEqual([]);
   });
 });
@@ -52,6 +60,15 @@ describe('whereaboutsNow', () => {
   it("doesn't place the farmer - the fields aren't built", () => {
     const placed = whereaboutsNow(BASE_FACTS);
     expect(placed.some((p) => p.villager.id === 'ada')).toBe(false);
+  });
+
+  it("doesn't place a worker whose workplace is on the Riverside or Forest map", () => {
+    const facts: VillageFacts = {
+      ...BASE_FACTS,
+      villagers: [{ id: 'finn', tradeId: 'fisher', role: 'villager' }],
+      builtBuildingIds: ['riverside-jetty'],
+    };
+    expect(whereaboutsNow(facts)).toEqual([]);
   });
 });
 
