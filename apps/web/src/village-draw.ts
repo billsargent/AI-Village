@@ -22,6 +22,12 @@ export interface PlacedVillager {
  * workplace's plots in order, so two farmers at a one-field village both
  * show at the same plot - there's no per-villager instance assignment
  * yet, so this never guesses which exact field is "theirs".
+ *
+ * Only places a villager whose workplace is on the main map - the
+ * Riverside and Forest maps have their own separate tile grids (spec
+ * section 8), so a `riverside-jetty`/`forest-hut` worker's plot
+ * coordinates don't mean anything on this one. Reached by their own
+ * signpost later, not this single view.
  */
 export function whereaboutsNow(data: VillageFacts): readonly PlacedVillager[] {
   const slotByWorksAt = new Map<string, number>();
@@ -34,7 +40,7 @@ export function whereaboutsNow(data: VillageFacts): readonly PlacedVillager[] {
     const slot = slotByWorksAt.get(plot.buildingId) ?? 0;
     const placed = positionForWorker(villager.tradeId, data.builtBuildingIds, data.phase, slot);
     slotByWorksAt.set(plot.buildingId, slot + 1);
-    if (placed) {
+    if (placed && placed.map === 'main') {
       whereabouts.push({ villager, x: placed.x, y: placed.y });
     }
   }
@@ -53,6 +59,12 @@ export interface PlacedBuilding {
  * Every built building this project has picked a sprite for yet, at its
  * plot position. A building with no `BUILDING_SPRITES` entry is skipped -
  * never stood in for with a placeholder box.
+ *
+ * Only includes plots on the main map - `riverside-jetty` and
+ * `smokehouse` are on the Riverside map, `forest-hut` on the Forest map
+ * (spec section 8), each its own separate tile grid reached by a
+ * signpost. Their plot coordinates aren't main-map coordinates, so
+ * drawing them here would place them at a meaningless, misleading spot.
  */
 export function builtBuildingsNow(data: VillageFacts): readonly PlacedBuilding[] {
   const slotByBuildingId = new Map<string, number>();
@@ -65,7 +77,7 @@ export function builtBuildingsNow(data: VillageFacts): readonly PlacedBuilding[]
       continue;
     }
     const plot = getPlot(buildingId as BuildingId, slot);
-    if (!plot) {
+    if (!plot || plot.map !== 'main') {
       continue;
     }
     placed.push({ buildingId, sprite, x: plot.x, y: plot.y });

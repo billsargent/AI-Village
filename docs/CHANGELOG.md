@@ -132,3 +132,13 @@
   with a real headless-Chromium screenshot of the running dev servers.
   Left over: sprites for the rest of `BUILDINGS`, and a real scrollable
   camera once there's an actual Tiled map (#112).
+- Sprites for the rest of `BUILDINGS` except `clocktower` (still tall
+  and narrow with nothing in this tileset reading as a tower, and
+  late-game anyway) - 15 new deliberate picks across four house shapes
+  and three roof colours, plus a walled garden, a bush cluster, a dock
+  and a worked-ground tile. Also fixes a real bug found while verifying
+  them: `riverside-jetty`, `smokehouse` and `forest-hut` live on the
+  Riverside/Forest maps, not the main map, but were being drawn using
+  their own map's coordinates as main-map coordinates - and skewing the
+  camera fit for everything else in the process. Both are later work
+  once there's a way to view those maps at all (#114).
