@@ -276,7 +276,16 @@ describe('App', () => {
               hasDeepseekApiKey = false;
             }
             return Promise.resolve(
-              new Response(JSON.stringify({ hasDeepseekApiKey }), { status: 200 }),
+              new Response(
+                JSON.stringify({
+                  hasDeepseekApiKey,
+                  mayorAutonomy: false,
+                  monthlyCeilingUsd: null,
+                  spentThisMonthUsd: 0,
+                  mayorLastTurn: null,
+                }),
+                { status: 200 },
+              ),
             );
           }
           throw new Error(`unexpected fetch: ${url}`);
@@ -369,5 +378,61 @@ describe('the inbox', () => {
     expect(await screen.findByText('Nothing is waiting on you.')).toBeTruthy();
     expect(decisions).toEqual([{ decision: 'approved' }]);
     expect(screen.getByRole('button', { name: 'Inbox' })).toBeTruthy();
+  });
+});
+
+describe("the Mayor's settings", () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it("can't be switched on until there's a key and a ceiling, then can", async () => {
+    let status = {
+      hasDeepseekApiKey: true,
+      mayorAutonomy: false,
+      monthlyCeilingUsd: null as number | null,
+      spentThisMonthUsd: 0,
+      mayorLastTurn: null,
+    };
+    const saved: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      fetchServing(FACTS, {
+        '/api/settings': (init) => {
+          if (init?.method === 'POST') {
+            const changes = JSON.parse(init.body as string) as Partial<typeof status>;
+            saved.push(changes);
+            status = { ...status, ...changes };
+          }
+          return status;
+        },
+      }),
+    );
+    renderApp();
+
+    await screen.findByLabelText(/Moonday, spring day 1/);
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+
+    const toggle = await screen.findByRole<HTMLInputElement>('checkbox', {
+      name: 'Let the Mayor act each morning',
+    });
+    expect(toggle.disabled).toBe(true);
+    expect(screen.getByText('Save a key and set a ceiling to turn this on.')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Monthly ceiling $'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Set ceiling' }));
+    const mayorToggle = () =>
+      screen.getByRole<HTMLInputElement>('checkbox', { name: 'Let the Mayor act each morning' });
+    await waitFor(() => {
+      expect(mayorToggle().disabled).toBe(false);
+    });
+    expect(screen.getByText('Spent in the last 30 days: $0.00 of $2.00')).toBeTruthy();
+
+    fireEvent.click(mayorToggle());
+    await waitFor(() => {
+      expect(mayorToggle().checked).toBe(true);
+    });
+    expect(saved).toEqual([{ monthlyCeilingUsd: 2 }, { mayorAutonomy: true }]);
   });
 });

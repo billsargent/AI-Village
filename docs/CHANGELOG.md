@@ -297,3 +297,9 @@
   `GET /api/approvals` and `POST /api/approvals/:id` to list and decide
   requests (approving runs the tool; a tool that refuses leaves the
   request pending); and an Inbox button with a count over the map (#154).
+- The Mayor's mornings: an opt-in `MayorScheduler` runs the Mayor's
+  duties as each live village day begins - only with the Mayor switched
+  on, a key saved and a monthly ceiling set, never for caught-up days.
+  The meter is persisted so the ceiling holds across restarts, a hire
+  waits in the inbox, the village holds still during a turn, and the
+  server now listens on 127.0.0.1 only (#156).

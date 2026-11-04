@@ -71,6 +71,13 @@
       "when": 1793824129494,
       "tag": "0009_shiny_leopardon",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1793826920755,
+      "tag": "0010_flawless_daredevil",
+      "breakpoints": true
     }
   ]
 }

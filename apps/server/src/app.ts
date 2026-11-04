@@ -1,16 +1,20 @@
-import { facts } from '@ai-village/agent';
+import { facts, type ModelClient } from '@ai-village/agent';
 import {
   closeDatabase,
   getSettings,
+  loadMeterSince,
   migrationsFolderPath,
   openAndMigrate,
   saveSettings,
+  type Settings,
 } from '@ai-village/db';
+import { createDeepSeekClient } from '@ai-village/integrations';
 import { clockSpeedSchema, createVillage, type VillageState } from '@ai-village/sim';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import { LiveVillage } from './live-village.js';
+import { MayorScheduler } from './mayor-scheduler.js';
 
 /** The default location for the owner's one SQLite database (spec section 2's "one folder"), overridable for tests. */
 const DEFAULT_DB_PATH = process.env.AIVILLAGE_DB_PATH ?? './village.db';
@@ -57,7 +61,19 @@ function bootstrapVillage(): VillageState {
   return { ...state, clock: { ...state.clock, minute: BOOTSTRAP_MINUTE } };
 }
 
-const saveApiKeySchema = z.object({ deepseekApiKey: z.string().trim().min(1) });
+const updateSettingsSchema = z
+  .object({
+    deepseekApiKey: z.string().trim().min(1, 'deepseekApiKey must be a non-empty string'),
+    mayorAutonomy: z.boolean(),
+    // A small, local village: a ceiling above $1000 a month is surely a typo.
+    monthlyCeilingUsd: z.number().positive().max(1000),
+  })
+  .partial()
+  .strict()
+  .refine((changes) => Object.keys(changes).length > 0, 'Nothing to save');
+
+/** Spec section 16's monthly ceiling is checked over the last 30 days of calls. */
+const BUDGET_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const setSpeedSchema = z.object({ speed: clockSpeedSchema });
 const decideSchema = z.object({ decision: z.enum(['approved', 'declined']) });
 /** How many past decisions the inbox shows alongside what's pending. */
@@ -68,6 +84,8 @@ export interface CreateAppOptions {
   dbPath?: string;
   /** Wall-clock milliseconds - injectable so tests can drive the village clock. */
   now?: () => number;
+  /** Builds a model client for the owner's key - a scripted fake in tests, DeepSeek otherwise. */
+  makeModelClient?: (apiKey: string) => ModelClient;
 }
 
 /**
@@ -82,11 +100,15 @@ export async function createApp(options: CreateAppOptions = {}) {
     options.dbPath ?? DEFAULT_DB_PATH,
     migrationsFolderPath(),
   );
-  const village = await LiveVillage.open({
+  const now = options.now ?? Date.now;
+  const village = await LiveVillage.open({ db, bootstrap: bootstrapVillage, now });
+  const mayor = new MayorScheduler({
+    village,
     db,
-    bootstrap: bootstrapVillage,
-    ...(options.now ? { now: options.now } : {}),
+    now,
+    makeClient: options.makeModelClient ?? ((apiKey) => createDeepSeekClient({ apiKey })),
   });
+  const stopMayor = mayor.start();
 
   const villageFacts = () => facts(village.state, 'owner', 'web');
   const clockStatus = () => ({
@@ -198,32 +220,67 @@ export async function createApp(options: CreateAppOptions = {}) {
     }),
   );
 
+  /**
+   * What the browser may know about the settings: never the key itself,
+   * only whether one is set - plus the Mayor's switch, the monthly
+   * ceiling, what's been spent against it, and the Mayor's last attempt.
+   */
+  const settingsStatus = async (settings: Settings) => {
+    const meter = await loadMeterSince(db, now() - BUDGET_WINDOW_MS);
+    return {
+      hasDeepseekApiKey: settings.deepseekApiKey !== null,
+      mayorAutonomy: settings.mayorAutonomy,
+      monthlyCeilingUsd: settings.monthlyCeilingUsd,
+      spentThisMonthUsd: meter.reduce((sum, call) => sum + call.costUsd, 0),
+      mayorLastTurn: mayor.last,
+    };
+  };
+
   app.get('/api/settings', async (c) => {
-    const settings = await getSettings(db);
-    return c.json({ hasDeepseekApiKey: settings.deepseekApiKey !== null });
+    return c.json(await settingsStatus(await getSettings(db)));
   });
 
+  /**
+   * Saves any of: the key, the Mayor's switch, the monthly ceiling. The
+   * Mayor can only be switched on once there's a key and a ceiling - it
+   * spends real money on the owner's key.
+   */
   app.post('/api/settings', async (c) => {
     const body: unknown = await c.req.json().catch(() => null);
-    const parsed = saveApiKeySchema.safeParse(body);
+    const parsed = updateSettingsSchema.safeParse(body);
     if (!parsed.success) {
-      return c.json({ error: 'deepseekApiKey must be a non-empty string' }, 400);
+      return c.json({ error: parsed.error.issues[0]?.message ?? 'Invalid settings' }, 400);
     }
-    await saveSettings(db, { deepseekApiKey: parsed.data.deepseekApiKey });
-    return c.json({ hasDeepseekApiKey: true });
+    const changes = Object.fromEntries(
+      Object.entries(parsed.data).filter(([, value]) => value !== undefined),
+    ) as Partial<Settings>;
+    const next = { ...(await getSettings(db)), ...changes };
+    if (next.mayorAutonomy && (next.deepseekApiKey === null || next.monthlyCeilingUsd === null)) {
+      return c.json(
+        { error: 'Set a DeepSeek API key and a monthly ceiling before turning the Mayor on' },
+        400,
+      );
+    }
+    return c.json(await settingsStatus(await saveSettings(db, changes)));
   });
 
+  /** Clears the key - which also switches the Mayor off, since it can't run without one. */
   app.delete('/api/settings', async (c) => {
-    await saveSettings(db, { deepseekApiKey: null });
-    return c.json({ hasDeepseekApiKey: false });
+    return c.json(
+      await settingsStatus(await saveSettings(db, { deepseekApiKey: null, mayorAutonomy: false })),
+    );
   });
 
   return {
     app,
     village,
+    mayor,
+    stopMayor,
     getState: () => village.state,
     /** Waits for any save in flight, then closes the database. */
     closeDb: async () => {
+      stopMayor();
+      await mayor.idle();
       await village.flush();
       closeDatabase(client);
     },

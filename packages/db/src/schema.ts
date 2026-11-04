@@ -132,6 +132,25 @@ export const promises = sqliteTable('promises', {
 export const settings = sqliteTable('settings', {
   id: integer('id').primaryKey(),
   deepseekApiKey: text('deepseek_api_key'),
+  /** Whether the Mayor takes a model turn each village morning. Off until the owner turns it on. */
+  mayorAutonomy: integer('mayor_autonomy', { mode: 'boolean' }).notNull().default(false),
+  /** Spec section 16's monthly ceiling: "Set at first run" - so unset until the owner sets it. */
+  monthlyCeilingUsd: real('monthly_ceiling_usd'),
+});
+
+/** Spec section 16's meter: every model call's purpose, villager, tokens, cost and time. */
+export const meter = sqliteTable('meter', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  at: real('at').notNull(),
+  purpose: text('purpose').notNull(),
+  villagerId: text('villager_id'),
+  model: text('model').notNull(),
+  tokensIn: integer('tokens_in').notNull(),
+  tokensCached: integer('tokens_cached').notNull(),
+  tokensOut: integer('tokens_out').notNull(),
+  tokensReasoning: integer('tokens_reasoning').notNull(),
+  costUsd: real('cost_usd').notNull(),
+  ms: real('ms').notNull(),
 });
 
 /** Spec section 4's `approvals` table: tool calls waiting on, or decided by, the owner. */

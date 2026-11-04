@@ -1,8 +1,8 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import { PROPOSE_HIRE_TOOL } from '@ai-village/agent';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { PROPOSE_HIRE_TOOL, type ModelClient } from '@ai-village/agent';
 import { createApp } from './app.js';
 
 const tempDirs: string[] = [];
@@ -68,7 +68,7 @@ describe('/api/settings', () => {
     const response = await app.request('/api/settings');
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ hasDeepseekApiKey: false });
+    expect(await response.json()).toMatchObject({ hasDeepseekApiKey: false });
   });
 
   it('saves a key with POST, never echoing its value back', async () => {
@@ -81,12 +81,12 @@ describe('/api/settings', () => {
     });
     expect(postResponse.status).toBe(200);
     const postBody: unknown = await postResponse.json();
-    expect(postBody).toEqual({ hasDeepseekApiKey: true });
+    expect(postBody).toMatchObject({ hasDeepseekApiKey: true });
     expect(JSON.stringify(postBody)).not.toContain('sk-test-123');
 
     const getResponse = await app.request('/api/settings');
     const getBody: unknown = await getResponse.json();
-    expect(getBody).toEqual({ hasDeepseekApiKey: true });
+    expect(getBody).toMatchObject({ hasDeepseekApiKey: true });
     expect(JSON.stringify(getBody)).not.toContain('sk-test-123');
   });
 
@@ -101,7 +101,7 @@ describe('/api/settings', () => {
 
     expect(response.status).toBe(400);
     const stillUnset = await app.request('/api/settings');
-    expect(await stillUnset.json()).toEqual({ hasDeepseekApiKey: false });
+    expect(await stillUnset.json()).toMatchObject({ hasDeepseekApiKey: false });
   });
 
   it('clears a saved key with DELETE', async () => {
@@ -115,9 +115,9 @@ describe('/api/settings', () => {
     const deleteResponse = await app.request('/api/settings', { method: 'DELETE' });
 
     expect(deleteResponse.status).toBe(200);
-    expect(await deleteResponse.json()).toEqual({ hasDeepseekApiKey: false });
+    expect(await deleteResponse.json()).toMatchObject({ hasDeepseekApiKey: false });
     const stillCleared = await app.request('/api/settings');
-    expect(await stillCleared.json()).toEqual({ hasDeepseekApiKey: false });
+    expect(await stillCleared.json()).toMatchObject({ hasDeepseekApiKey: false });
   });
 
   it('persists the key across app instances sharing the same database file', async () => {
@@ -137,12 +137,14 @@ describe('/api/settings', () => {
     closers.push(second.closeDb);
     const response = await second.app.request('/api/settings');
 
-    expect(await response.json()).toEqual({ hasDeepseekApiKey: true });
+    expect(await response.json()).toMatchObject({ hasDeepseekApiKey: true });
   });
 });
 
 /** A fake wall clock the test moves by hand. */
-function fakeClock(start = 1_800_000_000_000) {
+// Starts at the real time: the runner stamps meter records with Date.now(), so a
+// fake clock far from it would put every call outside the budget window.
+function fakeClock(start = Date.now()) {
   let now = start;
   return {
     now: () => now,
@@ -154,14 +156,22 @@ function fakeClock(start = 1_800_000_000_000) {
 
 const REAL_MS_PER_VILLAGE_HOUR = 10 * 60_000;
 
-async function createLiveTestApp(dbPath?: string, clock = fakeClock()) {
+async function createLiveTestApp(
+  dbPath?: string,
+  clock = fakeClock(),
+  makeModelClient?: (apiKey: string) => ModelClient,
+) {
   let path = dbPath;
   if (!path) {
     const dir = mkdtempSync(join(tmpdir(), 'ai-village-server-test-'));
     tempDirs.push(dir);
     path = join(dir, 'village.db');
   }
-  const created = await createApp({ dbPath: path, now: clock.now });
+  const created = await createApp({
+    dbPath: path,
+    now: clock.now,
+    ...(makeModelClient ? { makeModelClient } : {}),
+  });
   closers.push(created.closeDb);
   return { ...created, clock, dbPath: path };
 }
@@ -388,5 +398,180 @@ describe('/api/approvals', () => {
     const second = await createLiveTestApp(first.dbPath, clock);
     expect(second.village.inbox.requests).toHaveLength(1);
     expect(second.village.inbox.nextId).toBe(2);
+  });
+});
+
+describe("the Mayor's mornings", () => {
+  /** A fake model: one propose_hire call, then a plain reply. Counts its calls. */
+  function hiringModel() {
+    let calls = 0;
+    const keys: string[] = [];
+    const make = (apiKey: string): ModelClient => {
+      keys.push(apiKey);
+      return {
+        chatCompletion() {
+          calls++;
+          return Promise.resolve(
+            calls % 2 === 1
+              ? {
+                  text: '',
+                  usage: { promptTokens: 1000, completionTokens: 50, totalTokens: 1050 },
+                  toolCalls: [
+                    {
+                      id: `call_${calls}`,
+                      name: 'propose_hire',
+                      arguments: JSON.stringify({ tradeId: 'baker', reason: 'no bread yet' }),
+                    },
+                  ],
+                }
+              : {
+                  text: 'Done.',
+                  usage: { promptTokens: 1000, completionTokens: 5, totalTokens: 1005 },
+                },
+          );
+        },
+      };
+    };
+    return { make, calls: () => calls, keys };
+  }
+
+  async function saveSettingsVia(
+    app: { request: (p: string, i?: RequestInit) => Response | Promise<Response> },
+    body: object,
+  ) {
+    return app.request('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  async function reachNextMorning(
+    village: { tick: () => Promise<unknown> },
+    clock: { advance: (ms: number) => void },
+  ) {
+    // Bootstrap starts at 09:00 on day 0; 15 village hours later day 1 begins.
+    clock.advance(15 * REAL_MS_PER_VILLAGE_HOUR);
+    await village.tick();
+  }
+
+  it('stays off - and calls no model - until the owner turns it on', async () => {
+    const model = hiringModel();
+    const { app, village, mayor, clock } = await createLiveTestApp(
+      undefined,
+      fakeClock(),
+      model.make,
+    );
+    await saveSettingsVia(app, { deepseekApiKey: 'sk-test', monthlyCeilingUsd: 1 });
+    await reachNextMorning(village, clock);
+    await village.flush();
+    expect(model.calls()).toBe(0);
+    expect(await mayor.runOnce()).toBe('off');
+  });
+
+  it("won't switch on without a key and a monthly ceiling", async () => {
+    const { app } = await createLiveTestApp();
+    const response = await saveSettingsVia(app, { mayorAutonomy: true });
+    expect(response.status).toBe(400);
+    await saveSettingsVia(app, { deepseekApiKey: 'sk-test' });
+    expect((await saveSettingsVia(app, { mayorAutonomy: true })).status).toBe(400);
+    await saveSettingsVia(app, { monthlyCeilingUsd: 1 });
+    expect((await saveSettingsVia(app, { mayorAutonomy: true })).status).toBe(200);
+  });
+
+  it('when on, takes a turn as a new day begins - a hire lands in the inbox and the call is metered', async () => {
+    const model = hiringModel();
+    const { app, village, clock } = await createLiveTestApp(undefined, fakeClock(), model.make);
+    await saveSettingsVia(app, {
+      deepseekApiKey: 'sk-test',
+      monthlyCeilingUsd: 1,
+      mayorAutonomy: true,
+    });
+
+    await reachNextMorning(village, clock);
+    // The turn runs off the tick; wait for it to land.
+    await vi.waitFor(() => {
+      expect(village.inbox.requests).toHaveLength(1);
+    });
+    expect(village.inbox.requests[0]).toMatchObject({
+      toolId: 'propose_hire',
+      requestedBy: 'hesper',
+    });
+    expect(model.keys).toEqual(['sk-test']);
+
+    const settings = (await (await app.request('/api/settings')).json()) as {
+      spentThisMonthUsd: number;
+      mayorLastTurn: { outcome: string };
+    };
+    expect(settings.spentThisMonthUsd).toBeGreaterThan(0);
+    expect(settings.mayorLastTurn.outcome).toBe('ran');
+    // Never the key itself.
+    expect(JSON.stringify(settings)).not.toContain('sk-test');
+  });
+
+  it('stops at the monthly ceiling', async () => {
+    const model = hiringModel();
+    const { app, mayor } = await createLiveTestApp(undefined, fakeClock(), model.make);
+    // A ceiling far below one call's cost: the first call is allowed (nothing spent yet),
+    // and every attempt after it stops before calling the model.
+    await saveSettingsVia(app, {
+      deepseekApiKey: 'sk-test',
+      monthlyCeilingUsd: 0.000001,
+      mayorAutonomy: true,
+    });
+    expect(await mayor.runOnce()).toBe('ran');
+    const callsAfterFirst = model.calls();
+    expect(await mayor.runOnce()).toBe('over-budget');
+    expect(model.calls()).toBe(callsAfterFirst);
+  });
+
+  it('turning the key off switches the Mayor off too', async () => {
+    const { app } = await createLiveTestApp();
+    await saveSettingsVia(app, {
+      deepseekApiKey: 'sk-test',
+      monthlyCeilingUsd: 1,
+      mayorAutonomy: true,
+    });
+    const response = await app.request('/api/settings', { method: 'DELETE' });
+    expect(await response.json()).toMatchObject({ hasDeepseekApiKey: false, mayorAutonomy: false });
+  });
+
+  it('holds the village still during a turn, then applies the time that passed', async () => {
+    let release: (() => void) | undefined;
+    const slowModel = (): ModelClient => ({
+      chatCompletion: () =>
+        new Promise((resolve) => {
+          release = () => {
+            resolve({
+              text: 'Done.',
+              usage: { promptTokens: 10, completionTokens: 1, totalTokens: 11 },
+            });
+          };
+        }),
+    });
+    const { app, village, mayor, getState, clock } = await createLiveTestApp(
+      undefined,
+      fakeClock(),
+      slowModel,
+    );
+    await saveSettingsVia(app, {
+      deepseekApiKey: 'sk-test',
+      monthlyCeilingUsd: 1,
+      mayorAutonomy: true,
+    });
+
+    const turn = mayor.runOnce();
+    await vi.waitFor(() => {
+      expect(release).toBeDefined();
+    });
+    const minute = getState().clock.minute;
+    clock.advance(REAL_MS_PER_VILLAGE_HOUR);
+    await village.tick();
+    expect(getState().clock.minute).toBe(minute);
+
+    release?.();
+    await turn;
+    await village.tick();
+    expect(getState().clock.minute).toBeCloseTo(minute + 60);
   });
 });

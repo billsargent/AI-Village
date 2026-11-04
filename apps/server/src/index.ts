@@ -10,7 +10,9 @@ const TICK_MS = 1000;
 
 const { app, village, closeDb } = await createApp();
 
-serve({ fetch: app.fetch, port: PORT }, (info) => {
+// Spec section 16: "the server listens on 127.0.0.1 only" - it holds the
+// owner's key and can spend money on it, so it's never on the network.
+serve({ fetch: app.fetch, port: PORT, hostname: '127.0.0.1' }, (info) => {
   console.log(`AI-Village server listening on http://localhost:${info.port}`);
 });
 
