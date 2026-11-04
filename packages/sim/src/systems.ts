@@ -33,6 +33,7 @@ import { pickHappening, type StorytellerStyle } from './storyteller.js';
 import { chargeUpkeep } from './upkeep.js';
 import { runStint, type WorkerAssignment } from './work.js';
 import { drawWeather, type WeatherDay } from './weather.js';
+import { createWorkRequestQueue, type WorkRequestQueue } from './work-requests.js';
 
 const HOURS_PER_VILLAGE_DAY = 24;
 /** Spec section 6: "One stint is half a working day." */
@@ -76,6 +77,7 @@ export interface VillageState {
   board: BoardState;
   memory: MemoryState;
   promises: PromisesState;
+  workRequests: WorkRequestQueue;
 }
 
 export interface StartingStock {
@@ -136,6 +138,7 @@ export function createVillage(villageSeed: number, scenario: VillageScenario = {
     board: createBoard(),
     memory: createMemoryState(),
     promises: createPromisesState(),
+    workRequests: createWorkRequestQueue(),
   };
 }
 

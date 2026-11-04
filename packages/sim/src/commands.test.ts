@@ -443,3 +443,43 @@ describe('apply ThankVillager', () => {
     );
   });
 });
+
+describe('apply RequestWork', () => {
+  it('queues a work request and returns its id', () => {
+    const village = villageWithTwo();
+    const { state, events } = apply(village, {
+      kind: 'RequestWork',
+      villagerId: 'ada',
+      description: 'Weed the north field',
+    });
+
+    expect(state.workRequests.requests).toEqual([
+      { id: 1, villagerId: 'ada', description: 'Weed the north field', requestedMinute: 0 },
+    ]);
+    expect(events).toEqual([{ kind: 'WorkRequested', requestId: 1 }]);
+  });
+
+  it('appends a private chronicle entry - chat never runs the work itself', () => {
+    const village = villageWithTwo();
+    const { state } = apply(village, {
+      kind: 'RequestWork',
+      villagerId: 'ada',
+      description: 'Weed the north field',
+    });
+    expect(state.chronicle.at(-1)).toMatchObject({ kind: 'work-requested', public: false });
+  });
+
+  it('rejects an unknown villager', () => {
+    const village = villageWithTwo();
+    expect(() =>
+      apply(village, { kind: 'RequestWork', villagerId: 'nobody', description: 'Anything' }),
+    ).toThrow(CommandError);
+  });
+
+  it('rejects an empty description', () => {
+    const village = villageWithTwo();
+    expect(() =>
+      apply(village, { kind: 'RequestWork', villagerId: 'ada', description: '   ' }),
+    ).toThrow(CommandError);
+  });
+});

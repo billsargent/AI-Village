@@ -212,3 +212,11 @@
   data that had never been surfaced to the web client before. The
   almanac panel shows today's date and the full festival calendar,
   marking today's festival if one is running (#132).
+- The `request_work` chat tool (spec section 11's chat-tool table, the
+  last of its three to be missing): a `RequestWork` command and a
+  `WorkRequestQueue` in `packages/sim`, granted to the `villager` role
+  through a new `REQUEST_WORK_TOOL`. Chat still never runs real tools
+  itself - this only queues the request; running a queued work session
+  is the separate "Work session" purpose, not built yet. Fully
+  persisted (schema, migration, repository, snapshot mapping) so a
+  queued request survives save/reload like everything else (#134).

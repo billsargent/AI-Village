@@ -26,6 +26,7 @@ import { decidePromise, makePromise, type PromiseStatus } from './promises.js';
 import { seededRandom, weightedPick } from './random.js';
 import { applyGift } from './relationships.js';
 import type { VillageState } from './systems.js';
+import { queueWorkRequest } from './work-requests.js';
 
 export type Command =
   | { kind: 'GiveGift'; from: string; to: string; item: string; qty: number }
@@ -41,7 +42,8 @@ export type Command =
       promiseId: number;
       decision: Extract<PromiseStatus, 'kept' | 'released'>;
     }
-  | { kind: 'ThankVillager'; villagerId: string };
+  | { kind: 'ThankVillager'; villagerId: string }
+  | { kind: 'RequestWork'; villagerId: string; description: string };
 
 export type DomainEvent =
   | { kind: 'GiftGiven'; from: string; to: string; item: string; qty: number }
@@ -62,7 +64,8 @@ export type DomainEvent =
       promiseId: number;
       decision: Extract<PromiseStatus, 'kept' | 'released'>;
     }
-  | { kind: 'VillagerThanked'; villagerId: string; memoryId: number };
+  | { kind: 'VillagerThanked'; villagerId: string; memoryId: number }
+  | { kind: 'WorkRequested'; requestId: number };
 
 export interface CommandResult {
   state: VillageState;
@@ -94,6 +97,8 @@ export function apply(state: VillageState, command: Command): CommandResult {
       return applyDecidePromise(state, command);
     case 'ThankVillager':
       return applyThankVillager(state, command);
+    case 'RequestWork':
+      return applyRequestWork(state, command);
   }
 }
 
@@ -477,5 +482,44 @@ function applyThankVillager(state: VillageState, command: { villagerId: string }
   return {
     state: { ...state, villagerNeeds, memory, chronicle },
     events: [{ kind: 'VillagerThanked', villagerId: command.villagerId, memoryId }],
+  };
+}
+
+/**
+ * Spec section 11: "Chat never runs real tools itself. `request_work`
+ * queues a work session ... and the villager says it's queued." Only
+ * the queueing is built here - actually running a queued work session
+ * is the separate "Work session" purpose (work model, thinking on, the
+ * villager's role's tools), which this project hasn't built yet.
+ */
+function applyRequestWork(
+  state: VillageState,
+  command: { villagerId: string; description: string },
+): CommandResult {
+  requireVillager(state, command.villagerId);
+  if (command.description.trim().length === 0) {
+    throw new CommandError('A work request needs a description');
+  }
+
+  const requestId = state.workRequests.nextId;
+  const workRequests = queueWorkRequest(
+    state.workRequests,
+    command.villagerId,
+    command.description,
+    state.clock.minute,
+  );
+
+  const chronicle = appendChronicle(state.chronicle, {
+    minute: state.clock.minute,
+    kind: 'work-requested',
+    text: `${command.villagerId} queued work: "${command.description}"`,
+    actors: [command.villagerId],
+    importance: 1,
+    public: false,
+  });
+
+  return {
+    state: { ...state, workRequests, chronicle },
+    events: [{ kind: 'WorkRequested', requestId }],
   };
 }

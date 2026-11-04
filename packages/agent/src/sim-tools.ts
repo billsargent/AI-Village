@@ -5,6 +5,13 @@
  * meeting or vote"), now that `apply(command)` exists for each (#68,
  * #84, #86, #90, #96). All are game actions - risk none, never needing
  * approval - so they run straight against the sim through `apply()`.
+ *
+ * `request_work` (spec section 11's chat-tool table) is the same shape:
+ * it only queues a work request (`RequestWork` in `packages/sim`), it
+ * never runs the queued work itself. Spec section 11 says the owner's
+ * rules can require approval for it, but there's no settings/permission
+ * system yet to drive that, so it stays `risk: 'none'`/`approval:
+ * 'never'` like every other tool here until one exists - not faked.
  */
 
 import { apply } from '@ai-village/sim';
@@ -140,6 +147,20 @@ export const PROMISE_TOOL = defineTool({
   run: (args, ctx) => apply(ctx.state, { kind: 'MakePromise', ...args }),
 });
 
+export const REQUEST_WORK_TOOL = defineTool({
+  id: 'request_work',
+  title: 'Request work',
+  kind: 'game',
+  risk: 'none',
+  approval: 'never',
+  roles: ['villager'],
+  purposes: ['chat'],
+  costUsd: 0,
+  args: z.object({ villagerId: z.string(), description: z.string() }),
+  preview: (args) => `Queue work: "${args.description}"`,
+  run: (args, ctx) => apply(ctx.state, { kind: 'RequestWork', ...args }),
+});
+
 export const SIM_TOOLS = [
   GIFT_TOOL,
   PROPOSE_BUILDING_TOOL,
@@ -149,4 +170,5 @@ export const SIM_TOOLS = [
   CALL_VOTE_TOOL,
   REMEMBER_TOOL,
   PROMISE_TOOL,
+  REQUEST_WORK_TOOL,
 ] as const;

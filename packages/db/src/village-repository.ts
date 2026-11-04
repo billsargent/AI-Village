@@ -111,6 +111,13 @@ export interface PromiseRow {
   status: string;
 }
 
+export interface WorkRequestRow {
+  id: number;
+  villagerId: string;
+  description: string;
+  requestedMinute: number;
+}
+
 export interface VillageSnapshot {
   clock: ClockRow;
   builtBuildingIds: readonly string[];
@@ -125,6 +132,7 @@ export interface VillageSnapshot {
   board: readonly BoardPostRow[];
   memories: readonly MemoryRow[];
   promises: readonly PromiseRow[];
+  workRequests: readonly WorkRequestRow[];
 }
 
 const CLOCK_ROW_ID = 1;
@@ -202,6 +210,11 @@ export async function saveVillage(db: Database, snapshot: VillageSnapshot): Prom
     if (snapshot.promises.length > 0) {
       await tx.insert(schema.promises).values([...snapshot.promises]);
     }
+
+    await tx.delete(schema.workRequests);
+    if (snapshot.workRequests.length > 0) {
+      await tx.insert(schema.workRequests).values([...snapshot.workRequests]);
+    }
   });
 }
 
@@ -228,6 +241,7 @@ export async function loadVillage(db: Database): Promise<VillageSnapshot | null>
   const boardRows = await db.select().from(schema.board).all();
   const memoryRows = await db.select().from(schema.memories).all();
   const promiseRows = await db.select().from(schema.promises).all();
+  const workRequestRows = await db.select().from(schema.workRequests).all();
 
   return {
     clock: {
@@ -272,5 +286,6 @@ export async function loadVillage(db: Database): Promise<VillageSnapshot | null>
     board: boardRows,
     memories: memoryRows,
     promises: promiseRows,
+    workRequests: workRequestRows,
   };
 }

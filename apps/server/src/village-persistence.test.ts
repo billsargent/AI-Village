@@ -58,11 +58,16 @@ describe('village persistence round trip', () => {
       text: 'Met Tobin at the market.',
       importance: 6,
     }).state;
-    const state = apply(remembered, {
+    const promised = apply(remembered, {
       kind: 'MakePromise',
       villagerId: 'ada',
       text: 'Finish the fence',
       dueInDays: 5,
+    }).state;
+    const state = apply(promised, {
+      kind: 'RequestWork',
+      villagerId: 'ada',
+      description: 'Weed the north field',
     }).state;
 
     tempDir = mkdtempSync(join(tmpdir(), 'ai-village-persistence-test-'));
@@ -93,5 +98,6 @@ describe('village persistence round trip', () => {
     expect(reloaded.villagers).toEqual(state.villagers);
     expect(reloaded.memory.memories).toEqual(state.memory.memories);
     expect(reloaded.promises.promises).toEqual(state.promises.promises);
+    expect(reloaded.workRequests.requests).toEqual(state.workRequests.requests);
   });
 });

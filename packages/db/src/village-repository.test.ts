@@ -113,6 +113,9 @@ const SAMPLE_SNAPSHOT: VillageSnapshot = {
       status: 'open',
     },
   ],
+  workRequests: [
+    { id: 1, villagerId: 'ada', description: 'Weed the north field', requestedMinute: 60 },
+  ],
 };
 
 describe('saveVillage / loadVillage', () => {
