@@ -99,4 +99,10 @@ export const INTERIOR_LAYOUTS: Partial<Record<BuildingId, readonly InteriorItem[
     { sprite: RUG_SMALL, x: 0, y: 3 },
     { sprite: PLANT, x: 7, y: 0 },
   ],
+  'forest-hut': [
+    { sprite: BED, x: 0, y: 0 },
+    { sprite: NIGHTSTAND, x: 2, y: 0 },
+    { sprite: RUG_SMALL, x: 0, y: 3 },
+    { sprite: PLANT, x: 3, y: 1 },
+  ],
 };
