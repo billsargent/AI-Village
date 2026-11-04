@@ -1,6 +1,6 @@
 import { GRASS_TILE, type MapId } from '@ai-village/content';
 import { Application, Container, Sprite, TilingSprite } from 'pixi.js';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { loadFrameTexture } from './load-frame-texture.js';
 import type { VillageFacts } from './village-api.js';
 import { planCanvasDraw } from './village-draw.js';
@@ -56,12 +56,37 @@ export interface VillageCanvasProps {
   onBuildingClick?: ((buildingId: string) => void) | undefined;
 }
 
+/** A live scene for one map: the renderer, and the two layers the village's contents are drawn into. */
+interface Scene {
+  /** Flowers and daisies, flat on the grass under everything that stands. */
+  flatHost: Container;
+  /** Buildings, villagers, trees and rocks, depth-sorted by `zIndex` (their bottom edge). */
+  objectsHost: Container;
+  /** Whether the pointer is mid-drag, so a drag ending on a building isn't taken as a click. */
+  isDragging: () => boolean;
+}
+
+/**
+ * What's standing on the map, as a string: when it hasn't changed, the
+ * objects layer isn't rebuilt - so the clock ticking every village minute
+ * doesn't redraw the village.
+ */
+function contentsKey(data: VillageFacts, map: MapId): string {
+  const villagers = data.villagers.map((v) => `${v.id}:${v.tradeId}`).join(',');
+  return `${map}|${data.builtBuildingIds.join(',')}|${data.phase}|${villagers}`;
+}
+
 /**
  * One whole map (main, Riverside or Forest - spec section 8), drawn with
  * PixiJS from the real vendored art: grass, roads and water, the
  * scattered trees and flowers, every built building and whoever's at
  * work. The camera pans (drag, arrow keys or WASD) and zooms in whole
  * steps (the buttons, + and -, or the mouse wheel).
+ *
+ * The renderer, camera and ground are set up once per map; what stands on
+ * the map is a separate layer, rebuilt only when it changes. Standing
+ * sprites sort by `zIndex`, so anything that later moves (villagers
+ * walking) only has to update its position and `zIndex`.
  */
 export function VillageCanvas({
   data,
@@ -72,6 +97,7 @@ export function VillageCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const zoomByRef = useRef<((step: number) => void) | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
+  const [scene, setScene] = useState<Scene | null>(null);
 
   // Refs, not effect dependencies: a new Set or callback identity on every
   // parent render shouldn't tear down and rebuild the whole scene.
@@ -79,7 +105,17 @@ export function VillageCanvas({
   clickableRef.current = clickableBuildingIds;
   const onClickRef = useRef(onBuildingClick);
   onClickRef.current = onBuildingClick;
+  const dataRef = useRef(data);
+  dataRef.current = data;
 
+  const key = contentsKey(data, map);
+  // Re-planned only when what's standing on the map changes, not on every
+  // fresh copy of the facts.
+  const plan = useMemo(() => planCanvasDraw(dataRef.current, map), [key, map]);
+  const planRef = useRef(plan);
+  planRef.current = plan;
+
+  // The renderer, camera, input and ground: once per map.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) {
@@ -95,7 +131,7 @@ export function VillageCanvas({
     let app: Application | undefined;
 
     async function setup() {
-      const plan = planCanvasDraw(data, map);
+      const { width, height, ground } = planRef.current;
 
       const nextApp = new Application();
       try {
@@ -124,7 +160,7 @@ export function VillageCanvas({
       const world = new Container();
       app.stage.addChild(world);
 
-      const camera = cameras.get(map) ?? homeCamera(map, plan.width, plan.height);
+      const camera = cameras.get(map) ?? homeCamera(map, width, height);
       cameras.set(map, camera);
 
       const applyCamera = () => {
@@ -135,13 +171,11 @@ export function VillageCanvas({
         const viewW = app.screen.width / zoom;
         const viewH = app.screen.height / zoom;
         camera.x =
-          plan.width <= viewW
-            ? plan.width / 2
-            : Math.min(Math.max(camera.x, viewW / 2), plan.width - viewW / 2);
+          width <= viewW ? width / 2 : Math.min(Math.max(camera.x, viewW / 2), width - viewW / 2);
         camera.y =
-          plan.height <= viewH
-            ? plan.height / 2
-            : Math.min(Math.max(camera.y, viewH / 2), plan.height - viewH / 2);
+          height <= viewH
+            ? height / 2
+            : Math.min(Math.max(camera.y, viewH / 2), height - viewH / 2);
         world.scale.set(zoom);
         // Whole screen pixels only, so pixel art never shimmers between them.
         world.position.set(
@@ -232,34 +266,61 @@ export function VillageCanvas({
 
       const grass = new TilingSprite({
         texture: await loadFrameTexture(GRASS_TILE),
-        width: plan.width,
-        height: plan.height,
+        width,
+        height,
       });
+      const groundLayer = new Container();
+      for (const item of ground) {
+        groundLayer.addChild(
+          new Sprite({ texture: await loadFrameTexture(item.sprite), x: item.x, y: item.y }),
+        );
+      }
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- cancelled.current is set by the effect's cleanup closure, below, which this rule can't see across an await
       if (cancelled.current) {
         return;
       }
-      world.addChild(grass);
+      const flatHost = new Container();
+      const objectsHost = new Container();
+      world.addChild(grass, groundLayer, flatHost, objectsHost);
+      setScene({ flatHost, objectsHost, isDragging: () => dragged });
+    }
 
+    void setup();
+
+    return () => {
+      cancelled.current = true;
+      zoomByRef.current = null;
+      setScene(null);
+      for (const cleanup of cleanups) {
+        cleanup();
+      }
+      app?.destroy(true);
+    };
+  }, [map]);
+
+  // What stands on the map: rebuilt off-screen when it changes, then swapped in.
+  useEffect(() => {
+    if (!scene) {
+      return;
+    }
+    const cancelled = { current: false };
+
+    async function populate(current: Scene) {
       const flat = new Container();
-      for (const item of [...plan.ground, ...plan.groundDecor]) {
+      for (const item of plan.groundDecor) {
         flat.addChild(
           new Sprite({ texture: await loadFrameTexture(item.sprite), x: item.x, y: item.y }),
         );
       }
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- see above
-      if (cancelled.current) {
-        return;
-      }
-      world.addChild(flat);
 
+      const objects = new Container({ sortableChildren: true });
       for (const item of plan.standing) {
-        const texture = await loadFrameTexture(item.sprite);
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- see above
-        if (cancelled.current) {
-          return;
-        }
-        const sprite = new Sprite({ texture, x: item.x, y: item.y });
+        const sprite = new Sprite({
+          texture: await loadFrameTexture(item.sprite),
+          x: item.x,
+          y: item.y,
+          zIndex: item.y + item.sprite.height,
+        });
         if (item.kind === 'building') {
           const { buildingId } = item;
           sprite.eventMode = 'static';
@@ -270,29 +331,38 @@ export function VillageCanvas({
             }
           });
           sprite.on('pointerout', () => {
-            setHovered((current) => (current === buildingId ? null : current));
+            setHovered((now) => (now === buildingId ? null : now));
           });
           sprite.on('pointertap', () => {
-            if (!dragged && clickableRef.current?.has(buildingId)) {
+            if (!current.isDragging() && clickableRef.current?.has(buildingId)) {
               onClickRef.current?.(buildingId);
             }
           });
         }
-        world.addChild(sprite);
+        objects.addChild(sprite);
       }
+
+      if (cancelled.current) {
+        flat.destroy({ children: true });
+        objects.destroy({ children: true });
+        return;
+      }
+      for (const old of [
+        ...current.flatHost.removeChildren(),
+        ...current.objectsHost.removeChildren(),
+      ]) {
+        old.destroy({ children: true });
+      }
+      current.flatHost.addChild(flat);
+      current.objectsHost.addChild(objects);
     }
 
-    void setup();
+    void populate(scene);
 
     return () => {
       cancelled.current = true;
-      zoomByRef.current = null;
-      for (const cleanup of cleanups) {
-        cleanup();
-      }
-      app?.destroy(true);
     };
-  }, [data, map]);
+  }, [scene, plan]);
 
   return (
     <div

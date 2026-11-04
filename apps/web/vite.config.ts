@@ -13,7 +13,8 @@ export default defineConfig({
   publicDir: fileURLToPath(new URL('../../art/src', import.meta.url)),
   server: {
     proxy: {
-      '/api': 'http://localhost:3000',
+      // AIVILLAGE_API points the client at a server on another port.
+      '/api': process.env.AIVILLAGE_API ?? 'http://localhost:3000',
     },
   },
 });

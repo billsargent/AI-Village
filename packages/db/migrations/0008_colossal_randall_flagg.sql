@@ -1,0 +1,1 @@
+ALTER TABLE `clock` ADD `saved_at_real_ms` real;

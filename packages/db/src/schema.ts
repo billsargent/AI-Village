@@ -22,6 +22,8 @@ export const clock = sqliteTable('clock', {
   paused: integer('paused', { mode: 'boolean' }).notNull(),
   storytellerStyle: text('storyteller_style').notNull(),
   daysSinceLastHappening: integer('days_since_last_happening').notNull(),
+  /** Wall-clock ms when this village was last saved, for catch-up on the next start. */
+  savedAtRealMs: real('saved_at_real_ms'),
 });
 
 export const builtBuildings = sqliteTable('built_buildings', {

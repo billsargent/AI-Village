@@ -22,7 +22,10 @@ import type {
  * to live on this side of the boundary.
  */
 
-export function toSnapshot(state: VillageState): VillageSnapshot {
+export function toSnapshot(
+  state: VillageState,
+  savedAtRealMs: number | null = null,
+): VillageSnapshot {
   return {
     clock: {
       villageSeed: state.villageSeed,
@@ -31,6 +34,7 @@ export function toSnapshot(state: VillageState): VillageSnapshot {
       paused: state.clock.paused,
       storytellerStyle: state.storytellerStyle,
       daysSinceLastHappening: state.daysSinceLastHappening,
+      savedAtRealMs,
     },
     builtBuildingIds: state.builtBuildingIds,
     villagers: state.villagers.map((villager) => ({

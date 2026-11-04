@@ -6,9 +6,11 @@ import {
   openAndMigrate,
   saveSettings,
 } from '@ai-village/db';
-import { createVillage, type VillageState } from '@ai-village/sim';
+import { clockSpeedSchema, createVillage, type VillageState } from '@ai-village/sim';
 import { Hono } from 'hono';
+import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
+import { LiveVillage } from './live-village.js';
 
 /** The default location for the owner's one SQLite database (spec section 2's "one folder"), overridable for tests. */
 const DEFAULT_DB_PATH = process.env.AIVILLAGE_DB_PATH ?? './village.db';
@@ -20,10 +22,21 @@ const BOOTSTRAP_SEED = 1;
 const BOOTSTRAP_MINUTE = 9 * 60;
 
 /**
+ * The starting treasury. The spec doesn't name one; this is this
+ * scenario's own pick - a few weeks of the bootstrap village's wages and
+ * upkeep, so a live village isn't broke on its first morning.
+ */
+const BOOTSTRAP_TREASURY = 200;
+
+/** How often the live updates stream sends a keep-alive, so proxies don't drop an idle connection. */
+const EVENTS_KEEPALIVE_MS = 15_000;
+
+/**
  * A small starting scenario so there's a real village to look at, not an
  * empty shell: a Mayor at the town hall, a farmer (whose fields aren't
  * built yet, so they won't show as "at work" until the Mayor builds some),
  * and a cottage. All real, simulated state - not display-only fixtures.
+ * Used only the first time, when the database holds no village yet.
  */
 function bootstrapVillage(): VillageState {
   const state = createVillage(BOOTSTRAP_SEED, {
@@ -39,40 +52,104 @@ function bootstrapVillage(): VillageState {
       { villagerId: 'ada', tradeId: 'farmer', skillLevel: 1, hasTool: false, moodFactor: 1 },
     ],
     builtBuildingIds: ['town-hall', 'cottage'],
+    startingStock: [{ account: 'treasury', item: 'coins', qty: BOOTSTRAP_TREASURY }],
   });
   return { ...state, clock: { ...state.clock, minute: BOOTSTRAP_MINUTE } };
 }
 
 const saveApiKeySchema = z.object({ deepseekApiKey: z.string().trim().min(1) });
+const setSpeedSchema = z.object({ speed: clockSpeedSchema });
 
 export interface CreateAppOptions {
   /** Overridable for tests, so each test instance gets its own SQLite file. */
   dbPath?: string;
+  /** Wall-clock milliseconds - injectable so tests can drive the village clock. */
+  now?: () => number;
 }
 
 /**
  * Builds the Hono app, separate from the HTTP listener so tests can call
- * `app.request()` directly without binding a port. Holds one in-memory
- * village per process - persisting the village state itself to the db
- * package's repository is still a follow-up once there's a reason for
- * the client to see more than one village (spec section 3's server owns
- * the one Node process; this app is the part of it that answers HTTP
- * requests). Settings (the owner's API key) are the first thing this app
- * actually persists, below.
+ * `app.request()` directly without binding a port. Holds the one live
+ * village (spec section 3's server owns the one Node process; this app is
+ * the part of it that answers HTTP requests), loaded from and saved to
+ * the database. The caller drives its clock with `village.tick()`.
  */
 export async function createApp(options: CreateAppOptions = {}) {
-  const state: VillageState = bootstrapVillage();
-
   const { db, client } = await openAndMigrate(
     options.dbPath ?? DEFAULT_DB_PATH,
     migrationsFolderPath(),
   );
+  const village = await LiveVillage.open({
+    db,
+    bootstrap: bootstrapVillage,
+    ...(options.now ? { now: options.now } : {}),
+  });
+
+  const villageFacts = () => facts(village.state, 'owner', 'web');
+  const clockStatus = () => ({
+    speed: village.state.clock.speed,
+    paused: village.state.clock.paused,
+  });
 
   const app = new Hono();
 
   app.get('/api/village', (c) => {
-    return c.json(facts(state, 'owner', 'web'));
+    return c.json(villageFacts());
   });
+
+  app.get('/api/clock', (c) => {
+    return c.json(clockStatus());
+  });
+
+  /** Spec section 14's speed controls: `{ speed: 0 | 1 | 2 | 4 }`, 0 pausing the village. */
+  app.post('/api/clock', async (c) => {
+    const body: unknown = await c.req.json().catch(() => null);
+    const parsed = setSpeedSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: 'speed must be 0, 1, 2 or 4' }, 400);
+    }
+    await village.setSpeed(parsed.data.speed);
+    return c.json(clockStatus());
+  });
+
+  /**
+   * Live updates (spec section 2's server-sent events): a `village` event
+   * with the facts and the clock straight away, then again every time a
+   * village minute passes, a day settles or the speed changes. Villager
+   * positions aren't streamed (spec section 2) - the browser works them
+   * out from these facts.
+   */
+  app.get('/api/events', (c) =>
+    streamSSE(c, async (stream) => {
+      // An object, not a plain `let`: it's cleared from the onAbort callback,
+      // which TS's control-flow analysis can't see from the loop below.
+      const open = { current: true };
+      let id = 0;
+      const send = () =>
+        stream.writeSSE({
+          event: 'village',
+          id: String(id++),
+          data: JSON.stringify({ facts: villageFacts(), clock: clockStatus() }),
+        });
+      const unsubscribe = village.subscribe(() => {
+        if (open.current) {
+          void send();
+        }
+      });
+      stream.onAbort(() => {
+        open.current = false;
+        unsubscribe();
+      });
+      await send();
+      while (open.current) {
+        await stream.sleep(EVENTS_KEEPALIVE_MS);
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onAbort may clear it during the sleep
+        if (open.current) {
+          await stream.writeSSE({ event: 'ping', data: '' });
+        }
+      }
+    }),
+  );
 
   app.get('/api/settings', async (c) => {
     const settings = await getSettings(db);
@@ -96,8 +173,11 @@ export async function createApp(options: CreateAppOptions = {}) {
 
   return {
     app,
-    getState: () => state,
-    closeDb: () => {
+    village,
+    getState: () => village.state,
+    /** Waits for any save in flight, then closes the database. */
+    closeDb: async () => {
+      await village.flush();
       closeDatabase(client);
     },
   };
