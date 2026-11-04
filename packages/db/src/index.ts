@@ -7,3 +7,4 @@ export * from './schema.js';
 export * from './client.js';
 export * from './village-repository.js';
 export * from './settings-repository.js';
+export * from './approvals-repository.js';

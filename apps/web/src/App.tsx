@@ -2,10 +2,12 @@ import type { BuildingId, FurnitureKind, MapId } from '@ai-village/content';
 import { useState, type ReactNode } from 'react';
 import { buildingsWithInteriors } from './interior-draw.js';
 import { InteriorCanvas } from './InteriorCanvas.js';
+import { InboxPanel } from './InboxPanel.js';
 import { SettingsPanel } from './SettingsPanel.js';
 import {
   useClockStatus,
   useLiveUpdates,
+  usePendingApprovalCount,
   useSetClockSpeed,
   useVillageFacts,
   type ClockSpeed,
@@ -164,6 +166,8 @@ export function App() {
   const [panel, setPanel] = useState<FurniturePanel | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showJournal, setShowJournal] = useState(true);
+  const [showInbox, setShowInbox] = useState(false);
+  const pendingApprovals = usePendingApprovalCount();
 
   if (isPending) {
     return (
@@ -227,6 +231,23 @@ export function App() {
       <div className="absolute top-3 right-3 z-10 flex max-h-[calc(100%-1.5rem)] flex-col items-end gap-2">
         <Clock data={data} />
         <div className="flex gap-1">
+          <button
+            type="button"
+            className="wood-button"
+            aria-label={
+              pendingApprovals === 0 ? 'Inbox' : `Inbox: ${pendingApprovals} waiting on you`
+            }
+            onClick={() => {
+              setShowInbox(true);
+            }}
+          >
+            Inbox
+            {pendingApprovals > 0 && (
+              <span className="ml-1 rounded-sm bg-[#b3261e] px-1 text-[#fff6dc]">
+                {pendingApprovals}
+              </span>
+            )}
+          </button>
           <button
             type="button"
             className="wood-button"
@@ -351,6 +372,17 @@ export function App() {
               />
             )}
           </div>
+        </Dialog>
+      )}
+
+      {showInbox && (
+        <Dialog
+          title="Inbox"
+          onClose={() => {
+            setShowInbox(false);
+          }}
+        >
+          <InboxPanel />
         </Dialog>
       )}
 

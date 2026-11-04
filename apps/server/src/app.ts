@@ -59,6 +59,9 @@ function bootstrapVillage(): VillageState {
 
 const saveApiKeySchema = z.object({ deepseekApiKey: z.string().trim().min(1) });
 const setSpeedSchema = z.object({ speed: clockSpeedSchema });
+const decideSchema = z.object({ decision: z.enum(['approved', 'declined']) });
+/** How many past decisions the inbox shows alongside what's pending. */
+const RECENT_DECISIONS = 10;
 
 export interface CreateAppOptions {
   /** Overridable for tests, so each test instance gets its own SQLite file. */
@@ -90,6 +93,9 @@ export async function createApp(options: CreateAppOptions = {}) {
     speed: village.state.clock.speed,
     paused: village.state.clock.paused,
   });
+  const approvalsStatus = () => ({
+    pending: village.inbox.requests.filter((request) => request.status === 'pending').length,
+  });
 
   const app = new Hono();
 
@@ -113,6 +119,43 @@ export async function createApp(options: CreateAppOptions = {}) {
   });
 
   /**
+   * Spec section 12's approvals inbox: everything waiting on the owner,
+   * newest first, plus the last few decisions for context.
+   */
+  app.get('/api/approvals', (c) => {
+    const requests = [...village.inbox.requests].reverse();
+    const pending = requests.filter((request) => request.status === 'pending');
+    const decided = requests
+      .filter((request) => request.status !== 'pending')
+      .slice(0, RECENT_DECISIONS);
+    return c.json({ pending, decided });
+  });
+
+  /** The owner's decision on one request: `{ decision: 'approved' | 'declined' }`. */
+  app.post('/api/approvals/:id', async (c) => {
+    const id = Number(c.req.param('id'));
+    const body: unknown = await c.req.json().catch(() => null);
+    const parsed = decideSchema.safeParse(body);
+    if (!Number.isInteger(id) || !parsed.success) {
+      return c.json({ error: "decision must be 'approved' or 'declined'" }, 400);
+    }
+    const request = village.inbox.requests.find((candidate) => candidate.id === id);
+    if (!request) {
+      return c.json({ error: `No approval #${id}` }, 404);
+    }
+    if (request.status !== 'pending') {
+      return c.json({ error: `Approval #${id} was already ${request.status}` }, 409);
+    }
+    try {
+      return c.json(await village.decide(id, parsed.data.decision));
+    } catch (error) {
+      // The tool itself refused (e.g. no free names left to hire): nothing
+      // changed, and the request is still pending for the owner to decline.
+      return c.json({ error: error instanceof Error ? error.message : String(error) }, 409);
+    }
+  });
+
+  /**
    * Live updates (spec section 2's server-sent events): a `village` event
    * with the facts and the clock straight away, then again every time a
    * village minute passes, a day settles or the speed changes. Villager
@@ -129,7 +172,11 @@ export async function createApp(options: CreateAppOptions = {}) {
         stream.writeSSE({
           event: 'village',
           id: String(id++),
-          data: JSON.stringify({ facts: villageFacts(), clock: clockStatus() }),
+          data: JSON.stringify({
+            facts: villageFacts(),
+            clock: clockStatus(),
+            approvals: approvalsStatus(),
+          }),
         });
       const unsubscribe = village.subscribe(() => {
         if (open.current) {

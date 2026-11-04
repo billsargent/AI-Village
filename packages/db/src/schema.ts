@@ -134,6 +134,19 @@ export const settings = sqliteTable('settings', {
   deepseekApiKey: text('deepseek_api_key'),
 });
 
+/** Spec section 4's `approvals` table: tool calls waiting on, or decided by, the owner. */
+export const approvals = sqliteTable('approvals', {
+  id: integer('id').primaryKey(),
+  toolId: text('tool_id').notNull(),
+  /** JSON-encoded tool arguments, exactly as the model sent them. */
+  args: text('args').notNull(),
+  risk: text('risk').notNull(),
+  preview: text('preview'),
+  requestedBy: text('requested_by').notNull(),
+  status: text('status').notNull(),
+  createdAt: real('created_at').notNull(),
+});
+
 export const workRequests = sqliteTable('work_requests', {
   id: integer('id').primaryKey(),
   villagerId: text('villager_id').notNull(),
