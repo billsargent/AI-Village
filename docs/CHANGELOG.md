@@ -289,3 +289,6 @@
   streams the facts to the browser as server-sent events. The canvas
   sets up its ground once per map and rebuilds only what stands on it,
   depth-sorted by `zIndex`, leaving room for villagers that move (#150).
+- Nobody works, or is paid, at a workplace that isn't built: a trade's
+  workers fill its workplace's built instances in order, the same rule
+  the map uses to place them, and anyone left over waits (#152).
