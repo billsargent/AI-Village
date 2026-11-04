@@ -240,3 +240,14 @@
   yet calls `runTurn` with `mayor-duties` on a schedule - the Mayor's
   daily duties (spec section 11) still need a scheduler, separate work
   (#138).
+- The Mayor's-day scheduler mechanism (spec section 2: "The sim hands
+  its events back to the scheduler, which decides whether a model turn
+  should follow."): `runMayorDay` in `packages/agent` advances one
+  village day, then - only if there's a Mayor - runs their
+  `mayor-duties` turn with their governance tools. `runVillageDay` has
+  no finer-grained tick than a whole day, so this runs once per
+  simulated day rather than literally at 08:00 village time. Not wired
+  into a live loop yet: that needs a real `ModelClient` and a provider
+  API key, which stays out of server code by standing policy until
+  there's an established story for where a production key comes from
+  (#140).
