@@ -1,4 +1,4 @@
-import { GRASS_TILE, type SpriteFrame } from '@ai-village/content';
+import { GRASS_TILE, type MapId, type SpriteFrame } from '@ai-village/content';
 import { Application, Assets, Rectangle, Sprite, Texture, TilingSprite } from 'pixi.js';
 import { useEffect, useRef } from 'react';
 import type { VillageFacts } from './village-api.js';
@@ -19,12 +19,13 @@ async function loadFrameTexture(frame: SpriteFrame): Promise<Texture> {
 }
 
 /**
- * The village, drawn with PixiJS from the real vendored art (spec
- * section 10) at the real plot positions (spec section 8) - a single
- * fixed-camera view that fits whatever's currently built and staffed,
- * not yet a scrollable Tiled map (later work, once one exists).
+ * One map (main, Riverside or Forest - spec section 8), drawn with
+ * PixiJS from the real vendored art (spec section 10) at the real plot
+ * positions - a single fixed-camera view that fits whatever's currently
+ * built and staffed there, not yet a scrollable Tiled map (later work,
+ * once one exists).
  */
-export function VillageCanvas({ data }: { data: VillageFacts }) {
+export function VillageCanvas({ data, map = 'main' }: { data: VillageFacts; map?: MapId }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,7 +42,7 @@ export function VillageCanvas({ data }: { data: VillageFacts }) {
     let app: Application | undefined;
 
     async function setup() {
-      const plan = planCanvasDraw(data);
+      const plan = planCanvasDraw(data, map);
 
       const nextApp = new Application();
       try {
@@ -105,7 +106,7 @@ export function VillageCanvas({ data }: { data: VillageFacts }) {
       cancelled.current = true;
       app?.destroy(true);
     };
-  }, [data]);
+  }, [data, map]);
 
   return <div ref={containerRef} data-testid="village-canvas" />;
 }

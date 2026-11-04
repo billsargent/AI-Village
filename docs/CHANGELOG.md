@@ -148,3 +148,11 @@
   Boy, Child, Woman, OldMan, OldWoman, alongside the one already in
   use) via a stable string hash, so the same villager always looks the
   same without a new "look" field on `WorkerAssignment` yet (#116).
+- Riverside and Forest map navigation: the draw-planning functions
+  (`builtBuildingsNow`, `whereaboutsNow`, `planCanvasDraw`) now take
+  which map to draw instead of always assuming the main one, and
+  `apps/web` gets a Village/Riverside/Forest switcher so the buildings
+  and villagers already placed on those side maps (since #114) are
+  actually reachable. An empty side map renders as a real,
+  correctly-sized patch of grass (its own `MAPS` dimensions from spec
+  section 8), not the main map's arbitrary placeholder box (#118).

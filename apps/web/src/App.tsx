@@ -1,9 +1,18 @@
+import type { MapId } from '@ai-village/content';
+import { useState } from 'react';
 import { useVillageFacts } from './village-api.js';
 import { VillageCanvas } from './VillageCanvas.js';
 import { whereaboutsNow } from './village-draw.js';
 
+const MAP_LABELS: Record<MapId, string> = {
+  main: 'Village',
+  riverside: 'Riverside',
+  forest: 'Forest',
+};
+
 export function App() {
   const { data, isPending, isError, error } = useVillageFacts();
+  const [map, setMap] = useState<MapId>('main');
 
   if (isPending) {
     return <p className="p-4 text-slate-600">Loading the village...</p>;
@@ -13,7 +22,7 @@ export function App() {
     return <p className="p-4 text-red-700">Couldn't reach the village: {error.message}</p>;
   }
 
-  const whereabouts = whereaboutsNow(data);
+  const whereabouts = whereaboutsNow(data, map);
 
   return (
     <main className="p-4 text-slate-900">
@@ -27,8 +36,26 @@ export function App() {
       </p>
       <p>Population: {data.population}</p>
       <p>Treasury: {data.treasuryCoins} coins</p>
+      <div className="mt-2 flex gap-2">
+        {(Object.keys(MAP_LABELS) as MapId[]).map((mapId) => (
+          <button
+            key={mapId}
+            type="button"
+            onClick={() => {
+              setMap(mapId);
+            }}
+            className={
+              mapId === map
+                ? 'rounded bg-slate-700 px-3 py-1 text-white'
+                : 'rounded bg-slate-200 px-3 py-1 text-slate-900'
+            }
+          >
+            {MAP_LABELS[mapId]}
+          </button>
+        ))}
+      </div>
       <div className="mt-2">
-        <VillageCanvas data={data} />
+        <VillageCanvas data={data} map={map} />
       </div>
       {data.recentChronicle.length > 0 && (
         <ul className="mt-2 list-disc pl-5">

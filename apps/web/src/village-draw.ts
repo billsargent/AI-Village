@@ -1,10 +1,12 @@
 import {
   BUILDING_SPRITES,
   getPlot,
+  MAPS,
   positionForWorker,
   spriteForVillager,
   TILE_PX,
   type BuildingId,
+  type MapId,
   type SpriteFrame,
 } from '@ai-village/content';
 import type { VillagerFact, VillageFacts } from './village-api.js';
@@ -23,13 +25,12 @@ export interface PlacedVillager {
  * show at the same plot - there's no per-villager instance assignment
  * yet, so this never guesses which exact field is "theirs".
  *
- * Only places a villager whose workplace is on the main map - the
- * Riverside and Forest maps have their own separate tile grids (spec
- * section 8), so a `riverside-jetty`/`forest-hut` worker's plot
- * coordinates don't mean anything on this one. Reached by their own
- * signpost later, not this single view.
+ * Only places a villager whose workplace is on `map` - the main,
+ * Riverside and Forest maps each have their own separate tile grid (spec
+ * section 8), so a worker's plot coordinates only mean something on the
+ * one map they're actually on.
  */
-export function whereaboutsNow(data: VillageFacts): readonly PlacedVillager[] {
+export function whereaboutsNow(data: VillageFacts, map: MapId = 'main'): readonly PlacedVillager[] {
   const slotByWorksAt = new Map<string, number>();
   const whereabouts: PlacedVillager[] = [];
   for (const villager of data.villagers) {
@@ -40,7 +41,7 @@ export function whereaboutsNow(data: VillageFacts): readonly PlacedVillager[] {
     const slot = slotByWorksAt.get(plot.buildingId) ?? 0;
     const placed = positionForWorker(villager.tradeId, data.builtBuildingIds, data.phase, slot);
     slotByWorksAt.set(plot.buildingId, slot + 1);
-    if (placed && placed.map === 'main') {
+    if (placed && placed.map === map) {
       whereabouts.push({ villager, x: placed.x, y: placed.y });
     }
   }
@@ -57,16 +58,15 @@ export interface PlacedBuilding {
 
 /**
  * Every built building this project has picked a sprite for yet, at its
- * plot position. A building with no `BUILDING_SPRITES` entry is skipped -
- * never stood in for with a placeholder box.
- *
- * Only includes plots on the main map - `riverside-jetty` and
- * `smokehouse` are on the Riverside map, `forest-hut` on the Forest map
- * (spec section 8), each its own separate tile grid reached by a
- * signpost. Their plot coordinates aren't main-map coordinates, so
- * drawing them here would place them at a meaningless, misleading spot.
+ * plot position on `map`. A building with no `BUILDING_SPRITES` entry is
+ * skipped - never stood in for with a placeholder box. A building whose
+ * fixed plot (spec section 8) is on a different map is skipped too - its
+ * coordinates only mean something on that map.
  */
-export function builtBuildingsNow(data: VillageFacts): readonly PlacedBuilding[] {
+export function builtBuildingsNow(
+  data: VillageFacts,
+  map: MapId = 'main',
+): readonly PlacedBuilding[] {
   const slotByBuildingId = new Map<string, number>();
   const placed: PlacedBuilding[] = [];
   for (const buildingId of data.builtBuildingIds) {
@@ -77,7 +77,7 @@ export function builtBuildingsNow(data: VillageFacts): readonly PlacedBuilding[]
       continue;
     }
     const plot = getPlot(buildingId as BuildingId, slot);
-    if (!plot || plot.map !== 'main') {
+    if (!plot || plot.map !== map) {
       continue;
     }
     placed.push({ buildingId, sprite, x: plot.x, y: plot.y });
@@ -107,22 +107,21 @@ export interface CanvasDrawPlan {
 }
 
 const MARGIN_PX = TILE_PX * 2;
-const FALLBACK_WIDTH_TILES = 10;
-const FALLBACK_HEIGHT_TILES = 8;
 
 /**
- * Lays out this frame's buildings and villagers in canvas pixel space, a
- * simple single-screen "camera" that fits everything currently drawn
- * (plus a margin) rather than a scrollable map - the real map/camera is
- * later work once there's a real Tiled map to scroll around in.
+ * Lays out this frame's buildings and villagers on `map` in canvas pixel
+ * space, a simple single-screen "camera" that fits everything currently
+ * drawn there (plus a margin) rather than a scrollable map - the real
+ * map/camera is later work once there's a real Tiled map to scroll
+ * around in.
  */
-export function planCanvasDraw(data: VillageFacts): CanvasDrawPlan {
-  const buildings = builtBuildingsNow(data).map((building) => ({
+export function planCanvasDraw(data: VillageFacts, map: MapId = 'main'): CanvasDrawPlan {
+  const buildings = builtBuildingsNow(data, map).map((building) => ({
     sprite: building.sprite,
     x: building.x * TILE_PX,
     y: building.y * TILE_PX,
   }));
-  const villagers = whereaboutsNow(data).map(({ villager, x, y }) => ({
+  const villagers = whereaboutsNow(data, map).map(({ villager, x, y }) => ({
     villager,
     sprite: spriteForVillager(villager.id),
     x: x * TILE_PX,
@@ -135,9 +134,13 @@ export function planCanvasDraw(data: VillageFacts): CanvasDrawPlan {
   ];
 
   if (boxes.length === 0) {
+    // Nothing built or staffed here yet - still a real, correctly-sized
+    // patch of this map (spec section 8's own dimensions), not an
+    // arbitrary placeholder box.
+    const dimensions = MAPS[map];
     return {
-      width: FALLBACK_WIDTH_TILES * TILE_PX,
-      height: FALLBACK_HEIGHT_TILES * TILE_PX,
+      width: dimensions.widthTiles * TILE_PX,
+      height: dimensions.heightTiles * TILE_PX,
       buildings: [],
       villagers: [],
     };
