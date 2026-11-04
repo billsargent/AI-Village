@@ -5,8 +5,8 @@ import { z } from 'zod';
 import { createApprovalsInbox } from './approvals.js';
 import { defaultBudgetSettings, type BudgetSettings } from './budget.js';
 import { facts } from './facts.js';
-import { runChat, runTurn, type ModelClient, type TurnContext } from './runner.js';
-import { GIFT_TOOL, PROPOSE_HIRE_TOOL } from './sim-tools.js';
+import { runChat, runTurn, toToolSchema, type ModelClient, type TurnContext } from './runner.js';
+import { GIFT_TOOL, PROPOSE_HIRE_TOOL, SIM_TOOLS } from './sim-tools.js';
 import { defineTool } from './tools.js';
 
 function scriptedClient(reply: string): { client: ModelClient; sentMessages: unknown[] } {
@@ -551,5 +551,18 @@ describe('runTurn', () => {
       status: 'pending',
     });
     expect(result.state.villagers).toHaveLength(1);
+  });
+});
+
+describe('toToolSchema', () => {
+  it('writes numeric bounds the way DeepSeek accepts them - never a boolean exclusiveMinimum, never a $schema line', () => {
+    const gift = toToolSchema(GIFT_TOOL);
+    const qty = (gift.parameters as { properties: Record<string, unknown> }).properties.qty;
+    expect(qty).toEqual({ type: 'number', exclusiveMinimum: 0 });
+    for (const tool of SIM_TOOLS) {
+      const json = JSON.stringify(toToolSchema(tool).parameters);
+      expect(json).not.toMatch(/"exclusiveM(in|ax)imum":(true|false)/);
+      expect(json).not.toContain('$schema');
+    }
   });
 });

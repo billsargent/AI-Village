@@ -307,3 +307,8 @@
   (DeepSeek's default is on). The meter counts cache-hit and reasoning
   tokens separately, prices follow DeepSeek's doubled peak hours, and the
   Mayor's morning proposes a hire rather than asking whether to (#158).
+- Chat with a villager: a chat dialog opened from the journal's People list
+  or with C, answered by the talk model with the villager's game tools,
+  memories and promises. It's metered, needs only a key, and is never stopped by
+  the monthly ceiling. Tool schemas are now sent as JSON Schema draft 7,
+  since DeepSeek rejected the OpenAPI form of `positive()` numbers (#160).

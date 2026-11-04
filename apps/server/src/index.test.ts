@@ -575,3 +575,94 @@ describe("the Mayor's mornings", () => {
     expect(getState().clock.minute).toBeCloseTo(minute + 60);
   });
 });
+
+describe('/api/villagers/:id/chat', () => {
+  function talkingModel(reply: string) {
+    const sent: unknown[] = [];
+    const make = (): ModelClient => ({
+      chatCompletion(messages) {
+        sent.push(messages);
+        return Promise.resolve({
+          text: reply,
+          usage: { promptTokens: 100, completionTokens: 10, totalTokens: 110 },
+        });
+      },
+    });
+    return { make, sent };
+  }
+
+  function post(
+    app: { request: (p: string, i?: RequestInit) => Response | Promise<Response> },
+    path: string,
+    body: object,
+  ) {
+    return app.request(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it('asks for a key before any model is called', async () => {
+    const model = talkingModel('Hello!');
+    const { app } = await createLiveTestApp(undefined, fakeClock(), model.make);
+    const response = await post(app, '/api/villagers/ada/chat', { message: 'Hi Ada' });
+    expect(response.status).toBe(400);
+    expect(model.sent).toHaveLength(0);
+  });
+
+  it('is 404 for someone who does not live here, and 400 for an empty message', async () => {
+    const { app } = await createLiveTestApp(undefined, fakeClock(), talkingModel('x').make);
+    expect((await app.request('/api/villagers/nobody/chat')).status).toBe(404);
+    await post(app, '/api/settings', { deepseekApiKey: 'test-key' });
+    expect((await post(app, '/api/villagers/ada/chat', { message: '   ' })).status).toBe(400);
+  });
+
+  it("returns the villager's reply, keeps the conversation, meters the call - with no monthly ceiling set", async () => {
+    const model = talkingModel('The fields are waiting to be built.');
+    const { app } = await createLiveTestApp(undefined, fakeClock(), model.make);
+    await post(app, '/api/settings', { deepseekApiKey: 'test-key' });
+
+    const response = await post(app, '/api/villagers/ada/chat', { message: 'How is work?' });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { lines: { from: string; text: string }[] };
+    expect(body.lines.map((line) => [line.from, line.text])).toEqual([
+      ['owner', 'How is work?'],
+      ['villager', 'The fields are waiting to be built.'],
+    ]);
+
+    const history = (await (await app.request('/api/villagers/ada/chat')).json()) as {
+      lines: unknown[];
+    };
+    expect(history.lines).toHaveLength(2);
+
+    await post(app, '/api/villagers/ada/chat', { message: 'Thanks' });
+    const secondPrompt = model.sent[1] as { role: string; content: string }[];
+    expect(secondPrompt.slice(-3).map((m) => m.content)).toEqual([
+      'How is work?',
+      'The fields are waiting to be built.',
+      'Thanks',
+    ]);
+
+    const settings = (await (await app.request('/api/settings')).json()) as {
+      spentThisMonthUsd: number;
+    };
+    expect(settings.spentThisMonthUsd).toBeGreaterThan(0);
+  });
+
+  it('answers 502, and keeps no half a conversation, when the model call fails', async () => {
+    const make = (): ModelClient => ({
+      chatCompletion: () => Promise.reject(new Error('network down')),
+    });
+    const { app } = await createLiveTestApp(undefined, fakeClock(), make);
+    await post(app, '/api/settings', { deepseekApiKey: 'test-key' });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const response = await post(app, '/api/villagers/ada/chat', { message: 'Hi' });
+    errorSpy.mockRestore();
+    expect(response.status).toBe(502);
+    const history = (await (await app.request('/api/villagers/ada/chat')).json()) as {
+      lines: unknown[];
+    };
+    expect(history.lines).toHaveLength(0);
+  });
+});

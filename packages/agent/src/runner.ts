@@ -123,12 +123,20 @@ export async function runChat(
   return { reply: result.text, meter: appendMeterRecord(meter, record) };
 }
 
-function toToolSchema(tool: ToolDefinition): ToolSchema {
-  return {
-    name: tool.id,
-    description: tool.title,
-    parameters: zodToJsonSchema(tool.args, { target: 'openApi3' }),
-  };
+/**
+ * A tool's arguments as JSON Schema draft 7. Not the OpenAPI 3 flavour:
+ * that writes `positive()` as `exclusiveMinimum: true`, which DeepSeek
+ * rejects outright ("true is not of type number"), failing every turn
+ * that offers such a tool. The `$schema` line is dropped - providers
+ * want just the schema.
+ */
+export function toToolSchema(tool: ToolDefinition): ToolSchema {
+  const parameters = { ...zodToJsonSchema(tool.args, { target: 'jsonSchema7' }) } as Record<
+    string,
+    unknown
+  >;
+  delete parameters.$schema;
+  return { name: tool.id, description: tool.title, parameters };
 }
 
 export interface TurnContext {

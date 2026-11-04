@@ -296,3 +296,53 @@ export function useClearDeepseekApiKey() {
     },
   });
 }
+
+/** One line of a chat with a villager (spec section 11's "Chat with the owner"). */
+export interface ChatLine {
+  from: 'owner' | 'villager';
+  text: string;
+  at: number;
+}
+
+async function fetchChat(villagerId: string): Promise<readonly ChatLine[]> {
+  const response = await fetch(`/api/villagers/${encodeURIComponent(villagerId)}/chat`);
+  if (!response.ok) {
+    throw new Error(`GET chat failed: ${response.status}`);
+  }
+  return ((await response.json()) as { lines: readonly ChatLine[] }).lines;
+}
+
+export function useChat(villagerId: string) {
+  return useQuery({ queryKey: ['chat', villagerId], queryFn: () => fetchChat(villagerId) });
+}
+
+async function sendChat(input: {
+  villagerId: string;
+  message: string;
+}): Promise<{ lines: readonly ChatLine[]; approvalRequested: boolean }> {
+  const response = await fetch(`/api/villagers/${encodeURIComponent(input.villagerId)}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: input.message }),
+  });
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error ?? `POST chat failed: ${response.status}`);
+  }
+  return (await response.json()) as { lines: readonly ChatLine[]; approvalRequested: boolean };
+}
+
+export function useSendChat() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: sendChat,
+    onSuccess: (result, input) => {
+      queryClient.setQueryData(['chat', input.villagerId], result.lines);
+      // A chat costs money and may have asked for an approval.
+      void queryClient.invalidateQueries({ queryKey: ['settings'] });
+      if (result.approvalRequested) {
+        void queryClient.invalidateQueries({ queryKey: ['approvals'] });
+      }
+    },
+  });
+}
