@@ -199,3 +199,9 @@
   wired to a Treasury panel showing `treasuryCoins` and
   `treasuryDeltaYesterday` (both already fetched, previously shown
   only in the top stats line) (#128).
+- Shop's table doubles as its "counter" (spec section 9: "catalogue
+  and prices... the goods ledger") - the sheet has no separate counter
+  sprite, so this reuses the table already placed there. Clicking it
+  opens a Stores panel listing `VillageFacts.stores` (good id ->
+  quantity), fetched since the server's first version but never shown
+  anywhere until now (#130).

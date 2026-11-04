@@ -20,6 +20,14 @@ const MAP_LABELS: Record<MapId, string> = {
  */
 const TOWN_HALL_INTERACTIVE_KINDS = new Set<FurnitureKind>(['bookshelf', 'chest']);
 
+/**
+ * Shop's table stands in for its "counter" (spec section 9: "Counter:
+ * catalogue and prices. Stores: the goods ledger.") - the sheet has no
+ * separate counter sprite, so this reuses the same table sprite already
+ * placed there, same as every other building.
+ */
+const SHOP_INTERACTIVE_KINDS = new Set<FurnitureKind>(['table']);
+
 /** "+3" / "-2" / "0", for yesterday's treasury change. */
 function signed(n: number): string {
   return n > 0 ? `+${n}` : `${n}`;
@@ -39,6 +47,7 @@ export function App() {
   const [interiorBuildingId, setInteriorBuildingId] = useState<BuildingId | null>(null);
   const [showArchive, setShowArchive] = useState(false);
   const [showTreasury, setShowTreasury] = useState(false);
+  const [showStores, setShowStores] = useState(false);
 
   if (isPending) {
     return <p className="p-4 text-slate-600">Loading the village...</p>;
@@ -72,6 +81,7 @@ export function App() {
                 setInteriorBuildingId(null);
                 setShowArchive(false);
                 setShowTreasury(false);
+                setShowStores(false);
               }}
               className="rounded bg-slate-200 px-3 py-1 text-slate-900"
             >
@@ -83,17 +93,26 @@ export function App() {
               Click the bookshelf for the archive, or the chest for the treasury.
             </p>
           )}
+          {interiorBuildingId === 'shop' && (
+            <p className="mt-2 text-sm text-slate-600">Click the counter for the stores.</p>
+          )}
           <div className="mt-2">
             <InteriorCanvas
               buildingId={interiorBuildingId}
               interactiveKinds={
-                interiorBuildingId === 'town-hall' ? TOWN_HALL_INTERACTIVE_KINDS : undefined
+                interiorBuildingId === 'town-hall'
+                  ? TOWN_HALL_INTERACTIVE_KINDS
+                  : interiorBuildingId === 'shop'
+                    ? SHOP_INTERACTIVE_KINDS
+                    : undefined
               }
               onFurnitureClick={(kind) => {
                 if (kind === 'bookshelf') {
                   setShowArchive(true);
                 } else if (kind === 'chest') {
                   setShowTreasury(true);
+                } else if (kind === 'table' && interiorBuildingId === 'shop') {
+                  setShowStores(true);
                 }
               }}
             />
@@ -141,6 +160,33 @@ export function App() {
               <p className="text-sm text-slate-600">
                 {signed(data.treasuryDeltaYesterday)} coins since yesterday
               </p>
+            </div>
+          )}
+          {showStores && (
+            <div className="mt-2 max-w-md rounded border border-slate-300 bg-white p-3">
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold">Stores</h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowStores(false);
+                  }}
+                  className="rounded bg-slate-200 px-2 py-0.5 text-sm text-slate-900"
+                >
+                  Close
+                </button>
+              </div>
+              {Object.keys(data.stores).length > 0 ? (
+                <ul className="mt-2 list-disc pl-5">
+                  {Object.entries(data.stores).map(([good, quantity]) => (
+                    <li key={good}>
+                      {titleCase(good)}: {quantity}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-slate-600">Nothing in the stores yet.</p>
+              )}
             </div>
           )}
         </>
