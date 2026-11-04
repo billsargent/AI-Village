@@ -277,3 +277,9 @@
   settings opening as framed dialogs over the map. Panels and buttons
   are 9-slice wood from the Ninja Adventure pack's theme (CC0), and the
   UI is set in Pixelify Sans (OFL 1.1), as spec section 10 names (#146).
+- A live clock in the sim: `settleDay` runs the current day's systems
+  without moving the clock (`runVillageDay` is now `settleDay` plus the
+  one-day jump, unchanged for the headless runner), and `tickLiveClock`
+  / `catchUpLiveClock` advance the clock by real time and settle each
+  day as it begins. An empty treasury no longer throws: work goes
+  unpaid, upkeep pays what it can, and the chronicle says so (#148).

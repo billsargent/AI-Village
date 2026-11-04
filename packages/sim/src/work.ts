@@ -32,6 +32,8 @@ export interface StintResult {
   produced: Readonly<Record<string, number>>;
   /** A plain reason the stint didn't run, e.g. "No flour: the mill needs wheat". */
   waiting: string | null;
+  /** True when the stint ran but the treasury couldn't pay its wage. */
+  unpaid?: boolean;
 }
 
 function seasonMultiplier(tradeId: string, season: Season): number {
@@ -154,6 +156,11 @@ export function runStint(
     }
   }
 
+  // An empty treasury can't pay: the work still happens, unpaid, and the
+  // caller says so - a live village must never crash because it's broke.
+  if (getBalance(nextLedger, 'treasury', 'coins') < WAGE_PER_STINT) {
+    return { ledger: nextLedger, produced, waiting: null, unpaid: true };
+  }
   nextLedger = recordMovement(nextLedger, {
     minute: context.minute,
     from: 'treasury',
