@@ -15,3 +15,4 @@ export * from './sprites.js';
 export * from './interiors.js';
 export * from './happenings.js';
 export * from './names.js';
+export * from './terrain.js';

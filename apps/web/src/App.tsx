@@ -256,8 +256,15 @@ export function App() {
               </button>
             ))}
           </div>
-          <div className="mt-2">
-            <VillageCanvas data={data} map={map} />
+          <div className="mt-2 h-[70vh] overflow-hidden rounded border border-slate-300">
+            <VillageCanvas
+              data={data}
+              map={map}
+              clickableBuildingIds={new Set(furnished)}
+              onBuildingClick={(buildingId) => {
+                setInteriorBuildingId(buildingId as BuildingId);
+              }}
+            />
           </div>
           {furnished.length > 0 && (
             <div className="mt-2 flex gap-2">

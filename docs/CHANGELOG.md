@@ -262,3 +262,12 @@
   `createApp` is now async and opens a real SQLite database for the
   first time. Settings storage only - doesn't wire `runMayorDay` (#140)
   into a live loop (#142).
+- A living map (W17): the village is always drawn whole, with a camera
+  that pans (drag, arrow keys, WASD) and zooms in whole steps (2x, 3x,
+  4x). Dirt roads follow spec section 8's own roads with a full blob
+  autotile, the river curves round the east and south with grassy banks
+  and a bridge, and a deterministic scatter grows a tree line round the
+  edges, groves, flower drifts and scrub on empty plots that clears once
+  something's built. Buildings sit facing the road with their keeper at
+  the door; hover to name one, click a furnished one to go inside. All
+  from the already-vendored outdoor sheet (#144).
