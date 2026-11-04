@@ -666,3 +666,30 @@ describe('/api/villagers/:id/chat', () => {
     expect(history.lines).toHaveLength(0);
   });
 });
+
+describe('GET /api/villagers/:id', () => {
+  it("returns a villager's card: trade, needs, mood, and nothing invented", async () => {
+    const { app } = await createTestApp();
+    const response = await app.request('/api/villagers/ada');
+    expect(response.status).toBe(200);
+    const card = (await response.json()) as {
+      id: string;
+      tradeId: string;
+      needs: Record<string, number> | null;
+      mood: number | null;
+      relationships: unknown[];
+      memories: unknown[];
+      promises: unknown[];
+    };
+    expect(card).toMatchObject({ id: 'ada', tradeId: 'farmer', memories: [], promises: [] });
+    expect(Object.keys(card.needs ?? {}).sort()).toEqual(
+      ['comfort', 'energy', 'fun', 'hunger', 'purpose', 'social'].sort(),
+    );
+    expect(typeof card.mood).toBe('number');
+  });
+
+  it('is 404 for someone who does not live here', async () => {
+    const { app } = await createTestApp();
+    expect((await app.request('/api/villagers/nobody')).status).toBe(404);
+  });
+});

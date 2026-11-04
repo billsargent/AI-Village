@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App.js';
 import type { VillageFacts } from './village-api.js';
@@ -499,5 +499,57 @@ describe('chatting with a villager', () => {
       await screen.findByText('Save a DeepSeek API key in Settings to chat with Hesper.'),
     ).toBeTruthy();
     expect(screen.queryByLabelText('Message to Hesper')).toBeNull();
+  });
+});
+
+describe('the villager card', () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const CARD = {
+    id: 'hesper',
+    tradeId: 'baker',
+    role: 'villager',
+    skillLevel: 2,
+    needs: { hunger: 80, energy: 25, social: 60, fun: 70, comfort: 90, purpose: 55 },
+    mood: 63,
+    relationships: [{ villagerId: 'ada', label: 'close-friend', affinity: 70, familiarity: 90 }],
+    memories: [{ text: "The owner's favourite food is plum jam", about: 'owner' }],
+    promises: [{ text: 'Save a loaf for the owner', daysLeft: 1 }],
+  };
+
+  it('opens from the People list with needs, mood, friends, memories and promises, then goes to chat', async () => {
+    vi.stubGlobal(
+      'fetch',
+      fetchServing(FACTS, {
+        '/api/villagers/hesper/chat': () => ({ lines: [] }),
+        '/api/villagers/hesper': () => CARD,
+        '/api/settings': () => ({
+          hasDeepseekApiKey: true,
+          mayorAutonomy: false,
+          monthlyCeilingUsd: null,
+          spentThisMonthUsd: 0,
+          mayorLastTurn: null,
+        }),
+      }),
+    );
+    renderApp();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'About Hesper' }));
+    expect(await screen.findByText('Hesper, the baker')).toBeTruthy();
+    expect(screen.getByText('Skill 2 of 5 - in the bakery right now')).toBeTruthy();
+    expect(screen.getByText('Mood: Content (63)')).toBeTruthy();
+    expect(screen.getByRole('meter', { name: 'Energy' }).getAttribute('aria-valuenow')).toBe('25');
+    expect(screen.getByText('Ada - close friend')).toBeTruthy();
+    expect(screen.getByText("The owner's favourite food is plum jam")).toBeTruthy();
+    expect(screen.getByText('Save a loaf for the owner - due in 1 day')).toBeTruthy();
+
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Chat with Hesper' }),
+    );
+    expect(await screen.findByText('Say hello to Hesper.')).toBeTruthy();
+    expect(screen.queryByText('Mood: Content (63)')).toBeNull();
   });
 });

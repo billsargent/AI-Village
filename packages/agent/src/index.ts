@@ -15,3 +15,4 @@ export * from './prompt.js';
 export * from './runner.js';
 export * from './mayor-schedule.js';
 export * from './chat.js';
+export * from './villager-card.js';
