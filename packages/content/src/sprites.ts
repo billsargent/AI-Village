@@ -17,7 +17,6 @@ export interface SpriteFrame {
 }
 
 const OUTSIDE_TILES = 'tiles/serene-village-outside.png';
-const VILLAGER_IDLE = 'characters/villager-idle.png';
 const TILE = 16;
 
 /** A rectangle given in art/src/tiles/serene-village-outside.png's own 16px tile grid. */
@@ -77,11 +76,43 @@ export const BUILDING_SPRITES: Partial<Record<BuildingId, SpriteFrame>> = {
   fields: tileRect(7, 1, 1, 1),
 };
 
-/** The one villager sprite available so far: a plain idle, facing the viewer. */
-export const VILLAGER_SPRITE: SpriteFrame = {
-  file: VILLAGER_IDLE,
-  x: 0,
-  y: 0,
-  width: 16,
-  height: 16,
-};
+function characterIdleFrame(file: string): SpriteFrame {
+  return { file: `characters/${file}`, x: 0, y: 0, width: 16, height: 16 };
+}
+
+/**
+ * A cross-section of Ninja Adventure's plain "villager" archetypes - not
+ * its ninjas, monsters or fantasy races, which don't fit a cosy village
+ * (spec section 10's style note). Each is that character's own idle
+ * frame, facing the viewer.
+ */
+const VILLAGER_SPRITES: readonly SpriteFrame[] = [
+  characterIdleFrame('villager-idle.png'),
+  characterIdleFrame('villager2.png'),
+  characterIdleFrame('villager3.png'),
+  characterIdleFrame('boy.png'),
+  characterIdleFrame('child.png'),
+  characterIdleFrame('woman.png'),
+  characterIdleFrame('old-man.png'),
+  characterIdleFrame('old-woman.png'),
+];
+
+/**
+ * A stable per-villager look: the same `villagerId` always maps to the
+ * same sprite (a plain string hash, not randomness), so a villager
+ * looks the same from render to render without needing a new "look"
+ * field on `WorkerAssignment` yet - every villager's actual appearance
+ * stays this project's own pick, never invented per render.
+ */
+export function spriteForVillager(villagerId: string): SpriteFrame {
+  let hash = 0;
+  for (let i = 0; i < villagerId.length; i++) {
+    hash = (hash * 31 + villagerId.charCodeAt(i)) | 0;
+  }
+  const index = Math.abs(hash) % VILLAGER_SPRITES.length;
+  const sprite = VILLAGER_SPRITES[index];
+  if (!sprite) {
+    throw new Error('unreachable: index is always within VILLAGER_SPRITES bounds');
+  }
+  return sprite;
+}

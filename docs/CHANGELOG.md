@@ -142,3 +142,9 @@
   their own map's coordinates as main-map coordinates - and skewing the
   camera fit for everything else in the process. Both are later work
   once there's a way to view those maps at all (#114).
+- Distinct per-villager appearances: every villager used to render as
+  the same single sprite. `spriteForVillager(villagerId)` now picks
+  from 8 of Ninja Adventure's plain "villager" archetypes (Villager2/3,
+  Boy, Child, Woman, OldMan, OldWoman, alongside the one already in
+  use) via a stable string hash, so the same villager always looks the
+  same without a new "look" field on `WorkerAssignment` yet (#116).
