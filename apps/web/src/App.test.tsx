@@ -70,9 +70,9 @@ describe('App', () => {
   it('shows the village facts once loaded', async () => {
     renderApp();
 
-    expect(await screen.findByText(/Moonday, spring day 1/)).toBeTruthy();
+    expect(await screen.findByLabelText(/Moonday, spring day 1/)).toBeTruthy();
     expect(screen.getByText('Population: 2')).toBeTruthy();
-    expect(screen.getByText('Treasury: 40 coins')).toBeTruthy();
+    expect(screen.getByLabelText('Treasury: 40 coins')).toBeTruthy();
     expect(screen.getByText('The market opened for the day.')).toBeTruthy();
     expect(screen.getByText('hesper is working at (58, 11)')).toBeTruthy();
   });
@@ -89,7 +89,7 @@ describe('App', () => {
     );
     renderApp();
 
-    await screen.findByText(/Moonday, spring day 1/);
+    await screen.findByLabelText(/Moonday, spring day 1/);
     expect(screen.queryByText(/finn is working at/)).toBeFalsy();
 
     fireEvent.click(screen.getByText('Riverside'));
@@ -105,17 +105,44 @@ describe('App', () => {
     );
     renderApp();
 
-    await screen.findByText(/Moonday, spring day 1/);
+    await screen.findByLabelText(/Moonday, spring day 1/);
     expect(screen.queryByTestId('interior-canvas')).toBeFalsy();
 
     fireEvent.click(screen.getByText('Look inside Cottage'));
 
+    // The room opens as a dialog over the map, which stays where it was.
     expect(await screen.findByTestId('interior-canvas')).toBeTruthy();
-    expect(screen.queryByTestId('village-canvas')).toBeFalsy();
+    expect(screen.getByRole('dialog', { name: 'Cottage' })).toBeTruthy();
+    expect(screen.getByTestId('village-canvas')).toBeTruthy();
 
     fireEvent.click(screen.getByText('Back to village'));
 
-    expect(await screen.findByTestId('village-canvas')).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeFalsy();
+    expect(screen.queryByTestId('interior-canvas')).toBeFalsy();
+  });
+
+  it('opens settings as a dialog and closes it again', async () => {
+    renderApp();
+
+    await screen.findByLabelText(/Moonday, spring day 1/);
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).toBeFalsy();
+  });
+
+  it('folds the journal away and back', async () => {
+    renderApp();
+
+    await screen.findByLabelText(/Moonday, spring day 1/);
+    expect(screen.getByText('The market opened for the day.')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Journal' }));
+    expect(screen.queryByText('The market opened for the day.')).toBeFalsy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Journal' }));
+    expect(screen.getByText('The market opened for the day.')).toBeTruthy();
   });
 
   it("shows a hint to click town-hall's bookshelf, chest and book, but no panels yet", async () => {
@@ -126,7 +153,7 @@ describe('App', () => {
     );
     renderApp();
 
-    await screen.findByText(/Moonday, spring day 1/);
+    await screen.findByLabelText(/Moonday, spring day 1/);
     fireEvent.click(screen.getByText('Look inside Town Hall'));
 
     expect(
@@ -147,7 +174,7 @@ describe('App', () => {
     );
     renderApp();
 
-    await screen.findByText(/Moonday, spring day 1/);
+    await screen.findByLabelText(/Moonday, spring day 1/);
     fireEvent.click(screen.getByText('Look inside Shop'));
 
     expect(await screen.findByText('Click the counter for the stores.')).toBeTruthy();
@@ -162,7 +189,7 @@ describe('App', () => {
     );
     renderApp();
 
-    await screen.findByText(/Moonday, spring day 1/);
+    await screen.findByLabelText(/Moonday, spring day 1/);
     fireEvent.click(screen.getByText('Look inside Cottage'));
 
     await screen.findByTestId('interior-canvas');
@@ -172,7 +199,7 @@ describe('App', () => {
   it("doesn't offer a look-inside button for a building with no furnished layout", async () => {
     renderApp();
 
-    await screen.findByText(/Moonday, spring day 1/);
+    await screen.findByLabelText(/Moonday, spring day 1/);
 
     expect(screen.queryByText(/Look inside/)).toBeFalsy();
   });
@@ -218,7 +245,7 @@ describe('App', () => {
       stubSettingsAwareFetch();
       renderApp();
 
-      await screen.findByText(/Moonday, spring day 1/);
+      await screen.findByLabelText(/Moonday, spring day 1/);
       fireEvent.click(screen.getByText('Settings'));
 
       expect(await screen.findByText('DeepSeek API key: not set')).toBeTruthy();
@@ -237,7 +264,7 @@ describe('App', () => {
       stubSettingsAwareFetch();
       renderApp();
 
-      await screen.findByText(/Moonday, spring day 1/);
+      await screen.findByLabelText(/Moonday, spring day 1/);
       fireEvent.click(screen.getByText('Settings'));
       await screen.findByText('DeepSeek API key: not set');
 

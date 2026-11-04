@@ -271,3 +271,9 @@
   something's built. Buildings sit facing the road with their keeper at
   the door; hover to name one, click a furnished one to go inside. All
   from the already-vendored outdoor sheet (#144).
+- A cosy game UI (W18): the map fills the window, with a wooden clock
+  (day, time, season, weather, coins) top right, a collapsible journal
+  (places, who's at work, the chronicle) under it, and interiors and
+  settings opening as framed dialogs over the map. Panels and buttons
+  are 9-slice wood from the Ninja Adventure pack's theme (CC0), and the
+  UI is set in Pixelify Sans (OFL 1.1), as spec section 10 names (#146).
