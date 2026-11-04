@@ -112,6 +112,36 @@ describe('App', () => {
     expect(await screen.findByTestId('village-canvas')).toBeTruthy();
   });
 
+  it("shows a hint to click town-hall's bookshelf, but no archive panel yet", async () => {
+    const facts: VillageFacts = { ...FACTS, builtBuildingIds: ['town-hall'] };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(JSON.stringify(facts), { status: 200 }))),
+    );
+    renderApp();
+
+    await screen.findByText(/Moonday, spring day 1/);
+    fireEvent.click(screen.getByText('Look inside Town Hall'));
+
+    expect(await screen.findByText('Click the bookshelf for the archive.')).toBeTruthy();
+    expect(screen.queryByText('Archive')).toBeFalsy();
+  });
+
+  it("doesn't show the bookshelf hint for a building without one", async () => {
+    const facts: VillageFacts = { ...FACTS, builtBuildingIds: ['cottage'] };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(JSON.stringify(facts), { status: 200 }))),
+    );
+    renderApp();
+
+    await screen.findByText(/Moonday, spring day 1/);
+    fireEvent.click(screen.getByText('Look inside Cottage'));
+
+    await screen.findByTestId('interior-canvas');
+    expect(screen.queryByText(/Click the bookshelf/)).toBeFalsy();
+  });
+
   it("doesn't offer a look-inside button for a building with no furnished layout", async () => {
     renderApp();
 

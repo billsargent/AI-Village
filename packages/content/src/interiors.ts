@@ -34,6 +34,33 @@ export const RUG_BIG = insideTileRect(6, 11, 3, 3);
 export const PLANT = insideTileRect(0, 12, 1, 1);
 
 /**
+ * What a picked furniture sprite actually is, independent of which
+ * building places it or where - spec section 9 ties real features to
+ * specific furniture by this same kind of name ("the bookshelf", "the
+ * desk"), not to a building+position pair.
+ */
+export type FurnitureKind =
+  'bed' | 'nightstand' | 'wardrobe' | 'table' | 'bookshelf' | 'chair' | 'rug' | 'plant';
+
+const KIND_BY_SPRITE = new Map<SpriteFrame, FurnitureKind>([
+  [BED, 'bed'],
+  [BED_PINK, 'bed'],
+  [NIGHTSTAND, 'nightstand'],
+  [WARDROBE, 'wardrobe'],
+  [TABLE, 'table'],
+  [BOOKSHELF, 'bookshelf'],
+  [CHAIR, 'chair'],
+  [RUG_SMALL, 'rug'],
+  [RUG_BIG, 'rug'],
+  [PLANT, 'plant'],
+]);
+
+/** The kind of a sprite picked above, for code that cares what a piece of furniture *is*, not just how to draw it. */
+export function kindOfFurniture(sprite: SpriteFrame): FurnitureKind | undefined {
+  return KIND_BY_SPRITE.get(sprite);
+}
+
+/**
  * A plain floor colour for interior scenes, the indoor equivalent of
  * the outdoor view's canvas background - not a real floor tile (the
  * sheet's own floor/wall art doesn't sit on clean tile boundaries, so

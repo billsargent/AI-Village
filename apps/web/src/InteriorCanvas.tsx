@@ -1,4 +1,4 @@
-import { INTERIOR_FLOOR_COLOR, type BuildingId } from '@ai-village/content';
+import { INTERIOR_FLOOR_COLOR, type BuildingId, type FurnitureKind } from '@ai-village/content';
 import { Application, Sprite } from 'pixi.js';
 import { useEffect, useMemo, useRef } from 'react';
 import { planInteriorDraw, type InteriorDrawPlan } from './interior-draw.js';
@@ -7,6 +7,18 @@ import { loadFrameTexture } from './load-frame-texture.js';
 /** Integer scaling only, no smoothing (spec section 10), matching the outdoor view. */
 const ZOOM = 3;
 
+export interface InteriorCanvasProps {
+  buildingId: BuildingId;
+  /**
+   * Which furniture kinds actually do something when clicked (spec
+   * section 9: each piece of furniture opens one real feature). Only
+   * these get a pointer cursor and a click handler - every other piece
+   * stays inert rather than offering a false affordance.
+   */
+  interactiveKinds?: ReadonlySet<FurnitureKind> | undefined;
+  onFurnitureClick?: ((kind: FurnitureKind) => void) | undefined;
+}
+
 /**
  * One building's furnished interior (spec section 10's picked furniture
  * sprites), drawn with PixiJS - a small fixed-camera scene fit to
@@ -14,9 +26,21 @@ const ZOOM = 3;
  * assigned-home data yet (spec section 8's aside), so this never
  * guesses who's "home".
  */
-export function InteriorCanvas({ buildingId }: { buildingId: BuildingId }) {
+export function InteriorCanvas({
+  buildingId,
+  interactiveKinds,
+  onFurnitureClick,
+}: InteriorCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const plan = useMemo(() => planInteriorDraw(buildingId), [buildingId]);
+
+  // Refs, not effect dependencies: a new inline callback/Set identity on
+  // every parent render shouldn't tear down and rebuild the whole PixiJS
+  // app, just change what a click does.
+  const interactiveKindsRef = useRef(interactiveKinds);
+  interactiveKindsRef.current = interactiveKinds;
+  const onFurnitureClickRef = useRef(onFurnitureClick);
+  onFurnitureClickRef.current = onFurnitureClick;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -62,6 +86,14 @@ export function InteriorCanvas({ buildingId }: { buildingId: BuildingId }) {
           return;
         }
         const sprite = new Sprite({ texture, x: item.x, y: item.y });
+        const kind = item.kind;
+        if (kind && interactiveKindsRef.current?.has(kind)) {
+          sprite.eventMode = 'static';
+          sprite.cursor = 'pointer';
+          sprite.on('pointertap', () => {
+            onFurnitureClickRef.current?.(kind);
+          });
+        }
         app.stage.addChild(sprite);
       }
     }

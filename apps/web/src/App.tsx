@@ -1,4 +1,4 @@
-import type { BuildingId, MapId } from '@ai-village/content';
+import type { BuildingId, FurnitureKind, MapId } from '@ai-village/content';
 import { useState } from 'react';
 import { buildingsWithInteriors } from './interior-draw.js';
 import { InteriorCanvas } from './InteriorCanvas.js';
@@ -12,6 +12,14 @@ const MAP_LABELS: Record<MapId, string> = {
   forest: 'Forest',
 };
 
+/**
+ * Town hall's bookshelf is its "archive cabinet" (spec section 9) -
+ * the one piece of furniture wired to a real feature so far. Every
+ * other piece, in every building, stays inert rather than offering a
+ * click that does nothing.
+ */
+const TOWN_HALL_INTERACTIVE_KINDS = new Set<FurnitureKind>(['bookshelf']);
+
 /** "town-hall" -> "Town Hall", for a building id with no dedicated label yet. */
 function titleCase(buildingId: string): string {
   return buildingId
@@ -24,6 +32,7 @@ export function App() {
   const { data, isPending, isError, error } = useVillageFacts();
   const [map, setMap] = useState<MapId>('main');
   const [interiorBuildingId, setInteriorBuildingId] = useState<BuildingId | null>(null);
+  const [showArchive, setShowArchive] = useState(false);
 
   if (isPending) {
     return <p className="p-4 text-slate-600">Loading the village...</p>;
@@ -55,15 +64,54 @@ export function App() {
               type="button"
               onClick={() => {
                 setInteriorBuildingId(null);
+                setShowArchive(false);
               }}
               className="rounded bg-slate-200 px-3 py-1 text-slate-900"
             >
               Back to village
             </button>
           </div>
+          {interiorBuildingId === 'town-hall' && (
+            <p className="mt-2 text-sm text-slate-600">Click the bookshelf for the archive.</p>
+          )}
           <div className="mt-2">
-            <InteriorCanvas buildingId={interiorBuildingId} />
+            <InteriorCanvas
+              buildingId={interiorBuildingId}
+              interactiveKinds={
+                interiorBuildingId === 'town-hall' ? TOWN_HALL_INTERACTIVE_KINDS : undefined
+              }
+              onFurnitureClick={(kind) => {
+                if (kind === 'bookshelf') {
+                  setShowArchive(true);
+                }
+              }}
+            />
           </div>
+          {showArchive && (
+            <div className="mt-2 max-w-md rounded border border-slate-300 bg-white p-3">
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold">Archive</h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowArchive(false);
+                  }}
+                  className="rounded bg-slate-200 px-2 py-0.5 text-sm text-slate-900"
+                >
+                  Close
+                </button>
+              </div>
+              {data.recentChronicle.length > 0 ? (
+                <ul className="mt-2 list-disc pl-5">
+                  {data.recentChronicle.map((entry, index) => (
+                    <li key={`${entry.minute}-${index}`}>{entry.text}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-slate-600">Nothing in the chronicle yet.</p>
+              )}
+            </div>
+          )}
         </>
       ) : (
         <>

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { INTERIOR_LAYOUTS } from './interiors.js';
+import { INTERIOR_LAYOUTS, kindOfFurniture } from './interiors.js';
 import type { SpriteFrame } from './sprites.js';
 
 /** A PNG's width/height live in its IHDR chunk at fixed byte offsets - no need for an image library just to read them. */
@@ -85,6 +85,14 @@ describe('interiors', () => {
           }
           expect(overlaps(footprint(a), footprint(b)), `${buildingId}[${i}] vs [${j}]`).toBe(false);
         }
+      }
+    }
+  });
+
+  it('knows the kind of every sprite actually placed in a layout', () => {
+    for (const [buildingId, items] of Object.entries(INTERIOR_LAYOUTS)) {
+      for (const item of items) {
+        expect(kindOfFurniture(item.sprite), buildingId).toBeDefined();
       }
     }
   });
