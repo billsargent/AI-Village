@@ -1,4 +1,10 @@
-import { DEFAULT_ROLE, HAPPENINGS, type HappeningCard, type RoleId } from '@ai-village/content';
+import {
+  DEFAULT_ROLE,
+  getTrade,
+  HAPPENINGS,
+  type HappeningCard,
+  type RoleId,
+} from '@ai-village/content';
 import { archiveOldBoardPosts, createBoard, type BoardState } from './board.js';
 import { calendarDateFromMinute, MINUTES_PER_DAY, type CalendarDate } from './calendar.js';
 import { appendChronicle, type Chronicle } from './chronicle.js';
@@ -233,15 +239,40 @@ export function settleDay(state: VillageState): { state: VillageState; report: D
   const waiting: string[] = [];
   const unpaid = new Set<string>();
 
+  // A trade's workers fill its workplace's built instances in order, one
+  // each - the same rule the map uses to place them (content's
+  // `positionForWorker`), so the sim never pays someone the map shows idle.
+  const placesTaken = new Map<string, number>();
+
   for (const villager of state.villagers) {
     const needsBeforeWork = villagerNeeds[villager.villagerId] ?? createNeeds();
 
     // needs -> mood -> the work system's moodFactor, used for both of today's stints
     const moodFactor = moodFactorFromMood(moodFromNeeds(needsBeforeWork));
 
-    // work: two stints a day (spec section 6)
+    const worksAt = getTrade(villager.tradeId)?.worksAt;
+    const taken = worksAt ? (placesTaken.get(worksAt) ?? 0) : 0;
+    const built = worksAt ? state.builtBuildingIds.filter((id) => id === worksAt).length : 0;
+    const hasPlace = worksAt !== undefined && taken < built;
+    if (worksAt && hasPlace) {
+      placesTaken.set(worksAt, taken + 1);
+    }
+
+    // work: two stints a day (spec section 6), if there's somewhere to do it
     let workedAStint = false;
-    for (let stintIndex = 0; stintIndex < STINTS_PER_DAY; stintIndex++) {
+    if (!hasPlace) {
+      const reason = `No ${worksAt ?? 'workplace'} for ${villager.villagerId} to work at yet`;
+      waiting.push(reason);
+      chronicle = appendChronicle(chronicle, {
+        minute: state.clock.minute,
+        kind: 'work-wait',
+        text: reason,
+        actors: [villager.villagerId],
+        importance: 1,
+        public: false,
+      });
+    }
+    for (let stintIndex = 0; hasPlace && stintIndex < STINTS_PER_DAY; stintIndex++) {
       const stint = runStint(
         ledger,
         { ...villager, moodFactor },

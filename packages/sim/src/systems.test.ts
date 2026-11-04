@@ -104,6 +104,7 @@ describe('runVillageDay', () => {
       villagers: [
         { villagerId: 'tobin', tradeId: 'baker', skillLevel: 1, hasTool: false, moodFactor: 1 },
       ],
+      builtBuildingIds: ['bakery'],
       startingStock: [{ account: 'treasury', item: 'coins', qty: 20 }],
     });
     const { report } = runVillageDay(village);
@@ -111,6 +112,34 @@ describe('runVillageDay', () => {
       'No flour: the bakery needs flour',
       'No flour: the bakery needs flour',
     ]);
+  });
+
+  it("doesn't let anyone work, or pay them, until their workplace is built", () => {
+    const village = createVillage(1, {
+      villagers: [
+        { villagerId: 'ada', tradeId: 'farmer', skillLevel: 1, hasTool: false, moodFactor: 1 },
+      ],
+      startingStock: [{ account: 'treasury', item: 'coins', qty: 20 }],
+    });
+    const { state, report } = runVillageDay(village);
+    expect(report.waiting).toEqual(['No fields for ada to work at yet']);
+    expect(getBalance(state.ledger, 'village', 'wheat')).toBe(0);
+    expect(getBalance(state.ledger, 'villager:ada', 'coins')).toBe(0);
+  });
+
+  it('gives each built workplace one worker, as the map does - the rest wait', () => {
+    const village = createVillage(1, {
+      villagers: [
+        { villagerId: 'ada', tradeId: 'farmer', skillLevel: 1, hasTool: false, moodFactor: 1 },
+        { villagerId: 'bram', tradeId: 'farmer', skillLevel: 1, hasTool: false, moodFactor: 1 },
+      ],
+      builtBuildingIds: ['fields'],
+      startingStock: [{ account: 'treasury', item: 'coins', qty: 20 }],
+    });
+    const { state, report } = runVillageDay(village);
+    expect(report.waiting).toEqual(['No fields for bram to work at yet']);
+    expect(getBalance(state.ledger, 'villager:ada', 'coins')).toBeGreaterThan(0);
+    expect(getBalance(state.ledger, 'villager:bram', 'coins')).toBe(0);
   });
 
   it('logs a chronicle entry for a wait, and for a happening when one fires', () => {
