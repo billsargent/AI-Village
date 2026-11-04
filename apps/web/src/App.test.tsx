@@ -132,6 +132,21 @@ describe('App', () => {
     expect(screen.queryByText('Treasury')).toBeFalsy();
   });
 
+  it("shows a hint to click shop's counter, but no stores panel yet", async () => {
+    const facts: VillageFacts = { ...FACTS, builtBuildingIds: ['shop'] };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(JSON.stringify(facts), { status: 200 }))),
+    );
+    renderApp();
+
+    await screen.findByText(/Moonday, spring day 1/);
+    fireEvent.click(screen.getByText('Look inside Shop'));
+
+    expect(await screen.findByText('Click the counter for the stores.')).toBeTruthy();
+    expect(screen.queryByText('Stores')).toBeFalsy();
+  });
+
   it("doesn't show the bookshelf hint for a building without one", async () => {
     const facts: VillageFacts = { ...FACTS, builtBuildingIds: ['cottage'] };
     vi.stubGlobal(
