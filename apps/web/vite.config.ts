@@ -14,7 +14,7 @@ export default defineConfig({
   server: {
     proxy: {
       // AIVILLAGE_API points the client at a server on another port.
-      '/api': process.env.AIVILLAGE_API ?? 'http://localhost:3000',
+      '/api': process.env.AIVILLAGE_API ?? 'http://127.0.0.1:3000',
     },
   },
 });

@@ -207,6 +207,42 @@ export function useLiveUpdates() {
  */
 export interface SettingsStatus {
   hasDeepseekApiKey: boolean;
+  /** Whether the Mayor takes a model turn each village morning, spending on the key. */
+  mayorAutonomy: boolean;
+  /** Spec section 16's monthly ceiling, or null until the owner sets one. */
+  monthlyCeilingUsd: number | null;
+  /** What model calls have cost over the last 30 days. */
+  spentThisMonthUsd: number;
+  /** The Mayor's most recent attempt, if any since the server started. */
+  mayorLastTurn: { at: number; outcome: string } | null;
+}
+
+export interface SettingsChanges {
+  mayorAutonomy?: boolean;
+  monthlyCeilingUsd?: number;
+}
+
+async function saveSettings(changes: SettingsChanges): Promise<SettingsStatus> {
+  const response = await fetch('/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(changes),
+  });
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error ?? `POST /api/settings failed: ${response.status}`);
+  }
+  return (await response.json()) as SettingsStatus;
+}
+
+export function useSaveSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: saveSettings,
+    onSuccess: (status) => {
+      queryClient.setQueryData(['settings'], status);
+    },
+  });
 }
 
 async function fetchSettingsStatus(): Promise<SettingsStatus> {

@@ -8,3 +8,4 @@ export * from './client.js';
 export * from './village-repository.js';
 export * from './settings-repository.js';
 export * from './approvals-repository.js';
+export * from './meter-repository.js';

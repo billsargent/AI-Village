@@ -89,6 +89,8 @@ export class LiveVillage {
   private lastTickAt: number;
   private lastSaveAt: number;
   private saving: Promise<void> = Promise.resolve();
+  private queue: Promise<unknown> = Promise.resolve();
+  private turnRunning = false;
   private readonly listeners = new Set<Listener>();
   private readonly db: Database;
   private readonly now: () => number;
@@ -145,16 +147,24 @@ export class LiveVillage {
   }
 
   /** Queues a tool call for the owner to decide - how a villager's turn asks for something risky. */
-  async requestApproval(
+  requestApproval(
     tool: ToolDefinition,
     args: unknown,
     requestedBy: string,
   ): Promise<ApprovalRequest> {
-    const { inbox, request } = requestApproval(this.approvals, tool, args, requestedBy, this.now());
-    this.approvals = inbox;
-    await this.save();
-    this.notify({ settled: [] });
-    return request;
+    return this.serially(async () => {
+      const { inbox, request } = requestApproval(
+        this.approvals,
+        tool,
+        args,
+        requestedBy,
+        this.now(),
+      );
+      this.approvals = inbox;
+      await this.save();
+      this.notify({ settled: [] });
+      return request;
+    });
   }
 
   /**
@@ -163,24 +173,80 @@ export class LiveVillage {
    * names are left for a hire - nothing changes and the error is thrown,
    * so the request stays pending for the owner to decline instead.
    */
-  async decide(
+  decide(
     id: number,
     decision: Extract<ApprovalStatus, 'approved' | 'declined'>,
   ): Promise<ApprovalRequest> {
-    const result = decideApproval(this.approvals, TOOL_REGISTRY, id, decision, this.current);
-    this.approvals = result.inbox;
-    this.current = result.state;
-    await this.save();
-    this.notify({ settled: [] });
-    const decided = this.approvals.requests.find((request) => request.id === id);
-    if (!decided) {
-      throw new Error(`Unknown approval #${id}`);
-    }
-    return decided;
+    return this.serially(async () => {
+      const result = decideApproval(this.approvals, TOOL_REGISTRY, id, decision, this.current);
+      this.approvals = result.inbox;
+      this.current = result.state;
+      await this.save();
+      this.notify({ settled: [] });
+      const decided = this.approvals.requests.find((request) => request.id === id);
+      if (!decided) {
+        throw new Error(`Unknown approval #${id}`);
+      }
+      return decided;
+    });
   }
 
-  /** Real time since the last tick passes on the village clock; any day it reaches is settled. */
-  async tick(): Promise<VillageChange> {
+  /**
+   * Real time since the last tick passes on the village clock; any day it
+   * reaches is settled. While a model turn is running this does nothing -
+   * the time isn't lost, it's all applied on the first tick after.
+   */
+  tick(): Promise<VillageChange> {
+    if (this.turnRunning) {
+      return Promise.resolve({ settled: [] });
+    }
+    return this.serially(() => this.tickNow());
+  }
+
+  /** Spec section 14's speed controls: pause (0), 1x, 2x, 4x. */
+  setSpeed(speed: ClockSpeed): Promise<void> {
+    return this.serially(async () => {
+      // Bank the time that passed at the old speed before switching.
+      await this.tickNow();
+      this.current = { ...this.current, clock: setClockSpeed(this.current.clock, speed) };
+      await this.save();
+      this.notify({ settled: [] });
+    });
+  }
+
+  /**
+   * Runs one model turn against the live village - the Mayor's morning,
+   * say - and applies what it returns. The village is held still while
+   * the turn runs: ticks are deferred and every other change waits, so
+   * the turn's result never overwrites something that happened during it.
+   * If the turn throws, nothing changes.
+   */
+  takeTurn(
+    turn: (
+      state: VillageState,
+      inbox: ApprovalsInbox,
+    ) => Promise<{ state: VillageState; inbox: ApprovalsInbox }>,
+  ): Promise<void> {
+    return this.serially(async () => {
+      this.turnRunning = true;
+      try {
+        const result = await turn(this.current, this.approvals);
+        this.current = result.state;
+        this.approvals = result.inbox;
+      } finally {
+        this.turnRunning = false;
+      }
+      await this.save();
+      this.notify({ settled: [] });
+    });
+  }
+
+  /** Whether a model turn is running right now. */
+  get isTakingTurn(): boolean {
+    return this.turnRunning;
+  }
+
+  private async tickNow(): Promise<VillageChange> {
     const now = this.now();
     const elapsed = now - this.lastTickAt;
     this.lastTickAt = now;
@@ -203,13 +269,11 @@ export class LiveVillage {
     return { settled: result.settled };
   }
 
-  /** Spec section 14's speed controls: pause (0), 1x, 2x, 4x. */
-  async setSpeed(speed: ClockSpeed): Promise<void> {
-    // Bank the time that passed at the old speed before switching.
-    await this.tick();
-    this.current = { ...this.current, clock: setClockSpeed(this.current.clock, speed) };
-    await this.save();
-    this.notify({ settled: [] });
+  /** Runs changes to the village one at a time, in the order they were asked for. */
+  private serially<T>(change: () => Promise<T>): Promise<T> {
+    const next = this.queue.then(change);
+    this.queue = next.catch(() => undefined);
+    return next;
   }
 
   /** Calls `listener` after every visible change; returns a function that stops it. */
