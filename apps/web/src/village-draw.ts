@@ -2,8 +2,8 @@ import {
   BUILDING_SPRITES,
   getPlot,
   positionForWorker,
+  spriteForVillager,
   TILE_PX,
-  VILLAGER_SPRITE,
   type BuildingId,
   type SpriteFrame,
 } from '@ai-village/content';
@@ -124,7 +124,7 @@ export function planCanvasDraw(data: VillageFacts): CanvasDrawPlan {
   }));
   const villagers = whereaboutsNow(data).map(({ villager, x, y }) => ({
     villager,
-    sprite: VILLAGER_SPRITE,
+    sprite: spriteForVillager(villager.id),
     x: x * TILE_PX,
     y: y * TILE_PX,
   }));

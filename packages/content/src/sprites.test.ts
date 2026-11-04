@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS } from './buildings.js';
-import { BUILDING_SPRITES, GRASS_TILE, VILLAGER_SPRITE, type SpriteFrame } from './sprites.js';
+import { BUILDING_SPRITES, GRASS_TILE, spriteForVillager, type SpriteFrame } from './sprites.js';
 
 /** A PNG's width/height live in its IHDR chunk at fixed byte offsets - no need for an image library just to read them. */
 function pngDimensions(path: string): { width: number; height: number } {
@@ -25,10 +25,23 @@ describe('sprites', () => {
     expect(GRASS_TILE.height).toBe(16);
   });
 
-  it('VILLAGER_SPRITE is a sane, tile-sized frame', () => {
-    expect(isSaneFrame(VILLAGER_SPRITE)).toBe(true);
-    expect(VILLAGER_SPRITE.width).toBe(16);
-    expect(VILLAGER_SPRITE.height).toBe(16);
+  describe('spriteForVillager', () => {
+    it('is a sane, tile-sized frame', () => {
+      const sprite = spriteForVillager('hesper');
+      expect(isSaneFrame(sprite)).toBe(true);
+      expect(sprite.width).toBe(16);
+      expect(sprite.height).toBe(16);
+    });
+
+    it('is deterministic - the same id always gets the same sprite', () => {
+      expect(spriteForVillager('hesper')).toEqual(spriteForVillager('hesper'));
+    });
+
+    it('spreads a sample of ids across more than one sprite', () => {
+      const sampleIds = Array.from({ length: 30 }, (_, i) => `villager-${i}`);
+      const files = new Set(sampleIds.map((id) => spriteForVillager(id).file));
+      expect(files.size).toBeGreaterThan(1);
+    });
   });
 
   it('every building sprite is a sane frame', () => {
@@ -61,9 +74,11 @@ describe('sprites', () => {
 
   it('crops every frame within the bounds of its real, committed sheet file', () => {
     const dimensionsByFile = new Map<string, { width: number; height: number }>();
+    const sampleIds = Array.from({ length: 30 }, (_, i) => `villager-${i}`);
+    const villagerFrames = new Map(sampleIds.map((id) => [id, spriteForVillager(id)]));
     const frames: [string, SpriteFrame][] = [
       ['GRASS_TILE', GRASS_TILE],
-      ['VILLAGER_SPRITE', VILLAGER_SPRITE],
+      ...villagerFrames.entries(),
       ...Object.entries(BUILDING_SPRITES),
     ];
     for (const [name, frame] of frames) {
