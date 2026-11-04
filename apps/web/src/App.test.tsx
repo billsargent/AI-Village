@@ -187,4 +187,69 @@ describe('App', () => {
 
     expect(await screen.findByText(/Couldn't reach the village/)).toBeTruthy();
   });
+
+  describe('Settings', () => {
+    function stubSettingsAwareFetch() {
+      let hasDeepseekApiKey = false;
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+          const url =
+            typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+          if (url.includes('/api/village')) {
+            return Promise.resolve(new Response(JSON.stringify(FACTS), { status: 200 }));
+          }
+          if (url.includes('/api/settings')) {
+            if (init?.method === 'POST') {
+              hasDeepseekApiKey = true;
+            } else if (init?.method === 'DELETE') {
+              hasDeepseekApiKey = false;
+            }
+            return Promise.resolve(
+              new Response(JSON.stringify({ hasDeepseekApiKey }), { status: 200 }),
+            );
+          }
+          throw new Error(`unexpected fetch: ${url}`);
+        }),
+      );
+    }
+
+    it('shows the API key as not set, then saves one', async () => {
+      stubSettingsAwareFetch();
+      renderApp();
+
+      await screen.findByText(/Moonday, spring day 1/);
+      fireEvent.click(screen.getByText('Settings'));
+
+      expect(await screen.findByText('DeepSeek API key: not set')).toBeTruthy();
+
+      fireEvent.change(screen.getByPlaceholderText('sk-...'), {
+        target: { value: 'sk-test-123' },
+      });
+      fireEvent.click(screen.getByText('Save'));
+
+      expect(await screen.findByText('DeepSeek API key: set')).toBeTruthy();
+      // Never shown back to the browser, even after saving it.
+      expect(screen.queryByDisplayValue('sk-test-123')).toBeFalsy();
+    });
+
+    it('clears a saved key', async () => {
+      stubSettingsAwareFetch();
+      renderApp();
+
+      await screen.findByText(/Moonday, spring day 1/);
+      fireEvent.click(screen.getByText('Settings'));
+      await screen.findByText('DeepSeek API key: not set');
+
+      fireEvent.change(screen.getByPlaceholderText('sk-...'), {
+        target: { value: 'sk-test-123' },
+      });
+      fireEvent.click(screen.getByText('Save'));
+      await screen.findByText('DeepSeek API key: set');
+
+      fireEvent.click(screen.getByText('Clear'));
+
+      expect(await screen.findByText('DeepSeek API key: not set')).toBeTruthy();
+    });
+  });
 });

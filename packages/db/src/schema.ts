@@ -118,6 +118,20 @@ export const promises = sqliteTable('promises', {
   status: text('status').notNull(),
 });
 
+/**
+ * A single row: the owner's settings, including the DeepSeek API key.
+ * Spec section 3/4 says secrets belong in the OS keychain, never the
+ * database - this project's owner explicitly chose to store it here
+ * instead (session decision, not a spec change), so it's called out
+ * plainly rather than silently matching the spec's own stated design.
+ * Defense in depth still applies: `apps/server`'s routes never echo
+ * this value back to the browser, only whether one is set.
+ */
+export const settings = sqliteTable('settings', {
+  id: integer('id').primaryKey(),
+  deepseekApiKey: text('deepseek_api_key'),
+});
+
 export const workRequests = sqliteTable('work_requests', {
   id: integer('id').primaryKey(),
   villagerId: text('villager_id').notNull(),
