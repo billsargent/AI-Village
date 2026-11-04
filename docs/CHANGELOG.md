@@ -220,3 +220,14 @@
   is the separate "Work session" purpose, not built yet. Fully
   persisted (schema, migration, repository, snapshot mapping) so a
   queued request survives save/reload like everything else (#134).
+- The `propose_hire` tool: a `HireVillager` command adds a new villager
+  to the sim with a free, app-picked name (a new `VILLAGER_NAMES` list
+  in `packages/content`), picked deterministically for a given trade.
+  `PROPOSE_HIRE_TOOL` is the first `SIM_TOOLS` entry that isn't risk
+  none - spec section 15: "Hire ... The owner decides" - so it's
+  `risk: 'medium'`/`approval: 'each-time'`, the first tool to actually
+  exercise `needsApproval`'s gate. Added the `mayor-duties` purpose's
+  model settings alongside `chat` (spec section 11's table). Left out,
+  and documented as such: traits, a "room"/free-cottage check, and the
+  newcomer walking in or staying at the inn first - none of that state
+  exists in the sim yet (#136).

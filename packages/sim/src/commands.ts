@@ -14,13 +14,13 @@
  * 7/15's memory and promises layers on top.
  */
 
-import { getBuilding, getGood } from '@ai-village/content';
+import { DEFAULT_ROLE, getBuilding, getGood, getTrade, VILLAGER_NAMES } from '@ai-village/content';
 import { postToBoard } from './board.js';
 import { calendarDateFromMinute, MINUTES_PER_DAY } from './calendar.js';
 import { appendChronicle } from './chronicle.js';
 import { MARKET_ACCOUNT, recordMovement } from './ledger.js';
 import { addMemory } from './memory.js';
-import { MAX_NEED } from './needs.js';
+import { createNeeds, MAX_NEED } from './needs.js';
 import type { OrderStatus } from './orders.js';
 import { decidePromise, makePromise, type PromiseStatus } from './promises.js';
 import { seededRandom, weightedPick } from './random.js';
@@ -43,7 +43,8 @@ export type Command =
       decision: Extract<PromiseStatus, 'kept' | 'released'>;
     }
   | { kind: 'ThankVillager'; villagerId: string }
-  | { kind: 'RequestWork'; villagerId: string; description: string };
+  | { kind: 'RequestWork'; villagerId: string; description: string }
+  | { kind: 'HireVillager'; tradeId: string; reason: string };
 
 export type DomainEvent =
   | { kind: 'GiftGiven'; from: string; to: string; item: string; qty: number }
@@ -65,7 +66,8 @@ export type DomainEvent =
       decision: Extract<PromiseStatus, 'kept' | 'released'>;
     }
   | { kind: 'VillagerThanked'; villagerId: string; memoryId: number }
-  | { kind: 'WorkRequested'; requestId: number };
+  | { kind: 'WorkRequested'; requestId: number }
+  | { kind: 'VillagerHired'; villagerId: string; tradeId: string };
 
 export interface CommandResult {
   state: VillageState;
@@ -99,6 +101,8 @@ export function apply(state: VillageState, command: Command): CommandResult {
       return applyThankVillager(state, command);
     case 'RequestWork':
       return applyRequestWork(state, command);
+    case 'HireVillager':
+      return applyHireVillager(state, command);
   }
 }
 
@@ -521,5 +525,70 @@ function applyRequestWork(
   return {
     state: { ...state, workRequests, chronicle },
     events: [{ kind: 'WorkRequested', requestId }],
+  };
+}
+
+/**
+ * Spec section 7: "The Mayor proposes a hire with a trade and traits.
+ * The app picks a free name, so no name is ever needed to hire." Only
+ * the trade is modeled - `WorkerAssignment` has no traits field yet
+ * (see `VillagerCard`'s own comment in `packages/agent`), so there's
+ * nothing to assign traits to. This also doesn't model "room" (a free
+ * cottage), walking in along the High Road, or staying at the inn
+ * first - none of that is tracked in `VillageState` yet; the newcomer
+ * is simply added as a full villager immediately. Whether to call this
+ * at all is the agent layer's job (spec section 15: "Hire ... The
+ * owner decides") via the tool's own approval gating - this command is
+ * the hire itself, not a proposal still waiting on a decision.
+ */
+function applyHireVillager(
+  state: VillageState,
+  command: { tradeId: string; reason: string },
+): CommandResult {
+  const trade = getTrade(command.tradeId);
+  if (!trade) {
+    throw new CommandError(`Unknown trade "${command.tradeId}"`);
+  }
+
+  const takenNames = new Set(state.villagers.map((villager) => villager.villagerId));
+  const freeNames = VILLAGER_NAMES.filter((name) => !takenNames.has(name));
+  if (freeNames.length === 0) {
+    throw new CommandError('No free names left to hire a newcomer');
+  }
+
+  const day = calendarDateFromMinute(state.clock.minute).absoluteDay;
+  const rng = seededRandom({
+    villageSeed: state.villageSeed,
+    day,
+    system: 'hire',
+    entity: command.tradeId,
+  });
+  const villagerId = freeNames[Math.floor(rng() * freeNames.length)] as string;
+
+  const villagers = [
+    ...state.villagers,
+    {
+      villagerId,
+      tradeId: trade.id,
+      skillLevel: 1,
+      hasTool: false,
+      moodFactor: 1,
+      role: DEFAULT_ROLE,
+    },
+  ];
+  const villagerNeeds = { ...state.villagerNeeds, [villagerId]: createNeeds() };
+
+  const chronicle = appendChronicle(state.chronicle, {
+    minute: state.clock.minute,
+    kind: 'hire',
+    text: `${villagerId} joined the village as a ${trade.id} (${command.reason}).`,
+    actors: [villagerId],
+    importance: 3,
+    public: true,
+  });
+
+  return {
+    state: { ...state, villagers, villagerNeeds, chronicle },
+    events: [{ kind: 'VillagerHired', villagerId, tradeId: trade.id }],
   };
 }

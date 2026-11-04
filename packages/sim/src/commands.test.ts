@@ -1,3 +1,4 @@
+import { VILLAGER_NAMES } from '@ai-village/content';
 import { describe, expect, it } from 'vitest';
 import { apply, CommandError } from './commands.js';
 import { getBalance, InsufficientBalanceError } from './ledger.js';
@@ -480,6 +481,90 @@ describe('apply RequestWork', () => {
     const village = villageWithTwo();
     expect(() =>
       apply(village, { kind: 'RequestWork', villagerId: 'ada', description: '   ' }),
+    ).toThrow(CommandError);
+  });
+});
+
+describe('apply HireVillager', () => {
+  it('adds a new villager with a free, app-picked name', () => {
+    const village = villageWithTwo();
+    const { state, events } = apply(village, {
+      kind: 'HireVillager',
+      tradeId: 'miller',
+      reason: 'the mill has nobody to run it',
+    });
+
+    expect(state.villagers).toHaveLength(3);
+    const hired = state.villagers.find((v) => v.villagerId !== 'ada' && v.villagerId !== 'tobin');
+    expect(hired).toMatchObject({
+      tradeId: 'miller',
+      skillLevel: 1,
+      hasTool: false,
+      role: 'villager',
+    });
+    expect(VILLAGER_NAMES).toContain(hired?.villagerId);
+    expect(events).toEqual([
+      { kind: 'VillagerHired', villagerId: hired?.villagerId, tradeId: 'miller' },
+    ]);
+  });
+
+  it('gives the newcomer starting needs', () => {
+    const village = villageWithTwo();
+    const { state } = apply(village, {
+      kind: 'HireVillager',
+      tradeId: 'miller',
+      reason: 'why not',
+    });
+    const hired = state.villagers.find((v) => v.tradeId === 'miller');
+    expect(hired).toBeDefined();
+    expect(state.villagerNeeds[hired?.villagerId ?? '']).toBeDefined();
+  });
+
+  it('never reuses an already-taken name', () => {
+    const village = villageWithTwo();
+    const { state: once } = apply(village, {
+      kind: 'HireVillager',
+      tradeId: 'miller',
+      reason: 'a',
+    });
+    const { state: twice } = apply(once, {
+      kind: 'HireVillager',
+      tradeId: 'fisher',
+      reason: 'b',
+    });
+    const names = twice.villagers.map((v) => v.villagerId);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it('appends a public chronicle entry', () => {
+    const village = villageWithTwo();
+    const { state } = apply(village, {
+      kind: 'HireVillager',
+      tradeId: 'miller',
+      reason: 'why not',
+    });
+    expect(state.chronicle.at(-1)).toMatchObject({ kind: 'hire', public: true });
+  });
+
+  it('rejects an unknown trade', () => {
+    const village = villageWithTwo();
+    expect(() =>
+      apply(village, { kind: 'HireVillager', tradeId: 'astronaut', reason: 'why not' }),
+    ).toThrow(CommandError);
+  });
+
+  it('rejects hiring once every name is taken', () => {
+    const village = createVillage(1, {
+      villagers: VILLAGER_NAMES.map((villagerId) => ({
+        villagerId,
+        tradeId: 'farmer',
+        skillLevel: 1,
+        hasTool: false,
+        moodFactor: 1,
+      })),
+    });
+    expect(() =>
+      apply(village, { kind: 'HireVillager', tradeId: 'miller', reason: 'why not' }),
     ).toThrow(CommandError);
   });
 });

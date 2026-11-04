@@ -1,13 +1,13 @@
 /**
  * Every model call has a purpose, and the purpose decides the model,
- * thinking, temperature, tools and budget (spec section 11). Only the
- * `chat` purpose is configured so far - the owner picked DeepSeek as the
- * talk model to start; the rest of spec section 11's Purposes table
- * (letters, meetings, work sessions, research, ...) is added purpose by
- * purpose as each is actually built.
+ * thinking, temperature, tools and budget (spec section 11). Only
+ * `chat` and `mayor-duties` are configured so far - the owner picked
+ * DeepSeek as the talk model to start; the rest of spec section 11's
+ * Purposes table (letters, meetings, work sessions, research, ...) is
+ * added purpose by purpose as each is actually built.
  */
 
-export const MODEL_PURPOSES = ['chat'] as const;
+export const MODEL_PURPOSES = ['chat', 'mayor-duties'] as const;
 export type ModelPurpose = (typeof MODEL_PURPOSES)[number];
 
 export interface ModelSettings {
@@ -29,6 +29,13 @@ const PURPOSE_SETTINGS: Partial<Readonly<Record<ModelPurpose, ModelSettings>>> =
     thinking: false,
     temperature: 0.7,
     maxSteps: 4,
+  },
+  'mayor-duties': {
+    provider: 'deepseek',
+    model: 'deepseek-chat',
+    thinking: false,
+    temperature: 0.5,
+    maxSteps: 6,
   },
 };
 
