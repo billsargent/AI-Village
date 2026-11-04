@@ -182,3 +182,15 @@
   5x5 footprint class. `riverside-jetty` (a dock, not an enclosed
   space) and the garden plots stay without an interior - outdoor by
   definition, not a gap waiting to be filled (#124).
+- Clickable furniture: spec section 9 ties real features to specific
+  furniture ("the bookshelf", "the desk"), not just a room to look at.
+  Every picked furniture sprite now has a semantic `kind`
+  (`kindOfFurniture` in `packages/content`), and town hall's bookshelf
+  - its "archive cabinet" - is wired to a real panel showing the
+    village chronicle (`VillageFacts.recentChronicle`, already fetched).
+    Only that one piece, in that one building, is actually clickable
+    (pointer cursor, a visible hint); every other piece of furniture
+    everywhere else stays inert rather than offering a click that does
+    nothing - a small, honest first slice of section 9's much larger
+    furniture-opens-a-dialog vision, not a general dialog framework
+    (#126).

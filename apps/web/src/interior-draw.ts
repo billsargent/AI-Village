@@ -1,7 +1,15 @@
-import { INTERIOR_LAYOUTS, TILE_PX, type BuildingId, type SpriteFrame } from '@ai-village/content';
+import {
+  INTERIOR_LAYOUTS,
+  kindOfFurniture,
+  TILE_PX,
+  type BuildingId,
+  type FurnitureKind,
+  type SpriteFrame,
+} from '@ai-village/content';
 
 export interface DrawnFurniture {
   sprite: SpriteFrame;
+  kind: FurnitureKind | undefined;
   /** Canvas pixel coordinates, already margin-adjusted. */
   x: number;
   y: number;
@@ -30,6 +38,7 @@ export function planInteriorDraw(buildingId: BuildingId): InteriorDrawPlan | und
 
   const furniture = layout.map((item) => ({
     sprite: item.sprite,
+    kind: kindOfFurniture(item.sprite),
     x: item.x * TILE_PX,
     y: item.y * TILE_PX,
   }));
