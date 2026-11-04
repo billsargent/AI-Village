@@ -33,7 +33,65 @@ describe('createDeepSeekClient', () => {
     });
 
     expect(result.text).toBe('Good morning!');
-    expect(result.usage).toEqual({ promptTokens: 10, completionTokens: 3, totalTokens: 13 });
+    expect(result.usage).toEqual({
+      promptTokens: 10,
+      completionTokens: 3,
+      totalTokens: 13,
+      cachedPromptTokens: 0,
+      reasoningTokens: 0,
+    });
+  });
+
+  it('reads cache-hit and reasoning tokens from the usage, as the live API reports them', async () => {
+    const client = createDeepSeekClient({
+      apiKey: 'test-key',
+      fetchImpl: fakeFetch({
+        choices: [{ message: { content: 'Hello' } }],
+        usage: {
+          prompt_tokens: 36,
+          completion_tokens: 24,
+          total_tokens: 60,
+          prompt_cache_hit_tokens: 20,
+          prompt_cache_miss_tokens: 16,
+          completion_tokens_details: { reasoning_tokens: 22 },
+        },
+      }),
+    });
+    const result = await client.chatCompletion([{ role: 'user', content: 'Hi' }], {
+      model: 'deepseek-flash',
+    });
+    expect(result.usage.cachedPromptTokens).toBe(20);
+    expect(result.usage.reasoningTokens).toBe(22);
+  });
+
+  it("sends thinking on or off explicitly - DeepSeek's default, when it's left out, is on", async () => {
+    const bodies: { thinking?: unknown }[] = [];
+    const fetchImpl = ((_url: string, init: { body: string }) => {
+      bodies.push(JSON.parse(init.body) as { thinking?: unknown });
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            choices: [{ message: { content: 'ok' } }],
+            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+          }),
+        text: () => Promise.resolve(''),
+      } as unknown as Response);
+    }) as unknown as typeof fetch;
+    const client = createDeepSeekClient({ apiKey: 'test-key', fetchImpl });
+
+    await client.chatCompletion([{ role: 'user', content: 'Hi' }], {
+      model: 'deepseek-flash',
+      thinking: false,
+    });
+    await client.chatCompletion([{ role: 'user', content: 'Hi' }], {
+      model: 'deepseek-flash',
+      thinking: true,
+    });
+
+    expect(bodies[0]?.thinking).toEqual({ type: 'disabled' });
+    expect(bodies[1]?.thinking).toEqual({ type: 'enabled' });
   });
 
   it('sends the request to the DeepSeek chat completions endpoint with the given key', async () => {

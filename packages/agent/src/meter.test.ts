@@ -48,10 +48,21 @@ describe('costSince', () => {
 });
 
 describe('computeCostUsd', () => {
+  // A Saturday and a Monday 07:00 UTC (in DeepSeek's 06:00-10:00 peak window).
+  const SATURDAY = Date.UTC(2026, 10, 7, 7, 0);
+  const MONDAY_PEAK = Date.UTC(2026, 10, 9, 7, 0);
+
   it('prices input, cached-input and output/reasoning tokens by their own rate', () => {
-    const cost = computeCostUsd('deepseek-chat', 1_000_000, 1_000_000, 500_000, 500_000);
-    // deepseek-chat: $0.28/$0.028/$0.42 per million (input/cached/output).
-    expect(cost).toBeCloseTo(0.28 + 0.028 + 0.42, 6);
+    const cost = computeCostUsd('deepseek-flash', 1_000_000, 1_000_000, 500_000, 500_000);
+    // deepseek-flash off-peak: $0.15/$0.003/$0.60 per million (input/cached/output).
+    expect(cost).toBeCloseTo(0.15 + 0.003 + 0.6, 6);
+  });
+
+  it('charges double in peak hours, and the base rate outside them', () => {
+    const offPeak = computeCostUsd('deepseek-flash', 1_000_000, 0, 0, 0, SATURDAY);
+    const peak = computeCostUsd('deepseek-flash', 1_000_000, 0, 0, 0, MONDAY_PEAK);
+    expect(offPeak).toBeCloseTo(0.15, 6);
+    expect(peak).toBeCloseTo(0.3, 6);
   });
 
   it('is 0 for a model with no price on file', () => {
@@ -59,6 +70,6 @@ describe('computeCostUsd', () => {
   });
 
   it('is 0 for zero tokens', () => {
-    expect(computeCostUsd('deepseek-chat', 0, 0, 0, 0)).toBe(0);
+    expect(computeCostUsd('deepseek-flash', 0, 0, 0, 0)).toBe(0);
   });
 });

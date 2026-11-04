@@ -37,8 +37,40 @@ export interface ModelClient {
       temperature?: number;
       maxTokens?: number;
       tools?: readonly ToolSchema[];
+      thinking?: boolean;
     },
   ): Promise<ChatCompletionResult>;
+}
+
+/**
+ * One call's meter record, splitting the provider's usage the way it
+ * bills: cache-hit input at the cached rate, the rest of the input at
+ * full rate, and output - reasoning included - at the output rate.
+ */
+function meterRecordFor(
+  model: string,
+  purpose: string,
+  villagerId: string,
+  usage: ChatCompletionResult['usage'],
+  at: number,
+  ms: number,
+): MeterRecord {
+  const cached = usage.cachedPromptTokens ?? 0;
+  const reasoning = usage.reasoningTokens ?? 0;
+  const tokensIn = usage.promptTokens - cached;
+  const tokensOut = usage.completionTokens - reasoning;
+  return {
+    at,
+    purpose,
+    villagerId,
+    model,
+    tokensIn,
+    tokensCached: cached,
+    tokensOut,
+    tokensReasoning: reasoning,
+    costUsd: computeCostUsd(model, tokensIn, cached, tokensOut, reasoning, at),
+    ms,
+  };
 }
 
 export interface RunChatResult {
@@ -82,27 +114,11 @@ export async function runChat(
   const result = await client.chatCompletion(messages, {
     model: settings.model,
     temperature: settings.temperature,
+    thinking: settings.thinking,
   });
   const ms = Date.now() - startedAt;
 
-  const record: MeterRecord = {
-    at: startedAt,
-    purpose,
-    villagerId: villager.id,
-    model: settings.model,
-    tokensIn: result.usage.promptTokens,
-    tokensCached: 0,
-    tokensOut: result.usage.completionTokens,
-    tokensReasoning: 0,
-    costUsd: computeCostUsd(
-      settings.model,
-      result.usage.promptTokens,
-      0,
-      result.usage.completionTokens,
-      0,
-    ),
-    ms,
-  };
+  const record = meterRecordFor(settings.model, purpose, villager.id, result.usage, startedAt, ms);
 
   return { reply: result.text, meter: appendMeterRecord(meter, record) };
 }
@@ -192,28 +208,15 @@ export async function runTurn(
     const result = await client.chatCompletion(messages, {
       model: settings.model,
       temperature: settings.temperature,
+      thinking: settings.thinking,
       ...(toolSchemas.length > 0 ? { tools: toolSchemas } : {}),
     });
     const ms = Date.now() - startedAt;
 
-    currentMeter = appendMeterRecord(currentMeter, {
-      at: startedAt,
-      purpose,
-      villagerId: villager.id,
-      model: settings.model,
-      tokensIn: result.usage.promptTokens,
-      tokensCached: 0,
-      tokensOut: result.usage.completionTokens,
-      tokensReasoning: 0,
-      costUsd: computeCostUsd(
-        settings.model,
-        result.usage.promptTokens,
-        0,
-        result.usage.completionTokens,
-        0,
-      ),
-      ms,
-    });
+    currentMeter = appendMeterRecord(
+      currentMeter,
+      meterRecordFor(settings.model, purpose, villager.id, result.usage, startedAt, ms),
+    );
 
     if (!result.toolCalls || result.toolCalls.length === 0) {
       return { reply: result.text, meter: currentMeter, state, events, inbox: currentInbox };
