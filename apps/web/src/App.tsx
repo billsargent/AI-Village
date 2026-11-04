@@ -18,7 +18,7 @@ const MAP_LABELS: Record<MapId, string> = {
  * feature so far. Every other piece, in every building, stays inert
  * rather than offering a click that does nothing.
  */
-const TOWN_HALL_INTERACTIVE_KINDS = new Set<FurnitureKind>(['bookshelf', 'chest']);
+const TOWN_HALL_INTERACTIVE_KINDS = new Set<FurnitureKind>(['bookshelf', 'chest', 'book']);
 
 /**
  * Shop's table stands in for its "counter" (spec section 9: "Counter:
@@ -48,6 +48,7 @@ export function App() {
   const [showArchive, setShowArchive] = useState(false);
   const [showTreasury, setShowTreasury] = useState(false);
   const [showStores, setShowStores] = useState(false);
+  const [showAlmanac, setShowAlmanac] = useState(false);
 
   if (isPending) {
     return <p className="p-4 text-slate-600">Loading the village...</p>;
@@ -82,6 +83,7 @@ export function App() {
                 setShowArchive(false);
                 setShowTreasury(false);
                 setShowStores(false);
+                setShowAlmanac(false);
               }}
               className="rounded bg-slate-200 px-3 py-1 text-slate-900"
             >
@@ -90,7 +92,8 @@ export function App() {
           </div>
           {interiorBuildingId === 'town-hall' && (
             <p className="mt-2 text-sm text-slate-600">
-              Click the bookshelf for the archive, or the chest for the treasury.
+              Click the bookshelf for the archive, the chest for the treasury, or the book for the
+              almanac.
             </p>
           )}
           {interiorBuildingId === 'shop' && (
@@ -111,6 +114,8 @@ export function App() {
                   setShowArchive(true);
                 } else if (kind === 'chest') {
                   setShowTreasury(true);
+                } else if (kind === 'book') {
+                  setShowAlmanac(true);
                 } else if (kind === 'table' && interiorBuildingId === 'shop') {
                   setShowStores(true);
                 }
@@ -187,6 +192,33 @@ export function App() {
               ) : (
                 <p className="mt-2 text-slate-600">Nothing in the stores yet.</p>
               )}
+            </div>
+          )}
+          {showAlmanac && (
+            <div className="mt-2 max-w-md rounded border border-slate-300 bg-white p-3">
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold">Almanac</h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAlmanac(false);
+                  }}
+                  className="rounded bg-slate-200 px-2 py-0.5 text-sm text-slate-900"
+                >
+                  Close
+                </button>
+              </div>
+              <p className="mt-2">
+                Today: {data.weekday}, {data.season} day {data.seasonDay}, year {data.year}
+              </p>
+              <ul className="mt-2 list-disc pl-5">
+                {data.festivals.map((festival) => (
+                  <li key={festival.name}>
+                    {festival.name} - {festival.season} day {festival.seasonDay}
+                    {festival.name === data.festival ? ' (today!)' : ''}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </>

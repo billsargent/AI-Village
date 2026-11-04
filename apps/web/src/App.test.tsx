@@ -32,6 +32,12 @@ const FACTS: VillageFacts = {
       public: true,
     },
   ],
+  festivals: [
+    { name: 'Sowing Fair', season: 'spring', seasonDay: 7 },
+    { name: 'Midsummer Night', season: 'summer', seasonDay: 14 },
+    { name: 'Harvest Festival', season: 'autumn', seasonDay: 10 },
+    { name: 'Lantern Night', season: 'winter', seasonDay: 14 },
+  ],
 };
 
 function renderApp() {
@@ -112,7 +118,7 @@ describe('App', () => {
     expect(await screen.findByTestId('village-canvas')).toBeTruthy();
   });
 
-  it("shows a hint to click town-hall's bookshelf and chest, but no panels yet", async () => {
+  it("shows a hint to click town-hall's bookshelf, chest and book, but no panels yet", async () => {
     const facts: VillageFacts = { ...FACTS, builtBuildingIds: ['town-hall'] };
     vi.stubGlobal(
       'fetch',
@@ -125,11 +131,12 @@ describe('App', () => {
 
     expect(
       await screen.findByText(
-        'Click the bookshelf for the archive, or the chest for the treasury.',
+        'Click the bookshelf for the archive, the chest for the treasury, or the book for the almanac.',
       ),
     ).toBeTruthy();
     expect(screen.queryByText('Archive')).toBeFalsy();
     expect(screen.queryByText('Treasury')).toBeFalsy();
+    expect(screen.queryByText('Almanac')).toBeFalsy();
   });
 
   it("shows a hint to click shop's counter, but no stores panel yet", async () => {

@@ -22,6 +22,13 @@ export interface VillagerFact {
   role: string;
 }
 
+export interface Festival {
+  name: string;
+  season: string;
+  /** 1-indexed day within the season. */
+  seasonDay: number;
+}
+
 export interface VillageFacts {
   weekday: string;
   season: string;
@@ -40,6 +47,7 @@ export interface VillageFacts {
   treasuryCoins: number;
   treasuryDeltaYesterday: number;
   recentChronicle: readonly ChronicleEntry[];
+  festivals: readonly Festival[];
 }
 
 async function fetchVillageFacts(): Promise<VillageFacts> {

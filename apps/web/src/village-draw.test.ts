@@ -24,6 +24,7 @@ const BASE_FACTS: VillageFacts = {
   treasuryCoins: 0,
   treasuryDeltaYesterday: 0,
   recentChronicle: [],
+  festivals: [],
 };
 
 describe('builtBuildingsNow', () => {

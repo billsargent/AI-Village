@@ -1,4 +1,10 @@
-import { createVillage, recordMovement, runVillageDay, type VillageState } from '@ai-village/sim';
+import {
+  createVillage,
+  FESTIVALS,
+  recordMovement,
+  runVillageDay,
+  type VillageState,
+} from '@ai-village/sim';
 import { describe, expect, it } from 'vitest';
 import { facts, renderFacts } from './facts.js';
 
@@ -82,6 +88,12 @@ describe('facts', () => {
     };
     const snapshot = facts(withChronicle, 'owner', 'chat');
     expect(snapshot.recentChronicle.map((entry) => entry.text)).toEqual(['second', 'first']);
+  });
+
+  it("reports the village's four fixed seasonal festivals, for the almanac", () => {
+    const snapshot = facts(villageWithStock(), 'owner', 'chat');
+    expect(snapshot.festivals).toEqual(FESTIVALS);
+    expect(snapshot.festivals).toHaveLength(4);
   });
 });
 
