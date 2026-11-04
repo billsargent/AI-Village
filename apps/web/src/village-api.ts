@@ -188,6 +188,8 @@ export function useLiveUpdates() {
       };
       queryClient.setQueryData(['village'], payload.facts);
       queryClient.setQueryData(['clock'], payload.clock);
+      // An open villager card follows their needs and memories as they change.
+      void queryClient.invalidateQueries({ queryKey: ['villager'] });
       // The stream only carries the count; refetch the list when it changes.
       const known = queryClient.getQueryData<ApprovalsList>(['approvals']);
       if (known?.pending.length !== payload.approvals.pending) {
@@ -344,5 +346,46 @@ export function useSendChat() {
         void queryClient.invalidateQueries({ queryKey: ['approvals'] });
       }
     },
+  });
+}
+
+/** Spec section 14's villager card - mirrors `@ai-village/agent`'s `VillagerCardData`. */
+export interface VillagerCard {
+  id: string;
+  tradeId: string;
+  role: string;
+  skillLevel: number;
+  needs: {
+    hunger: number;
+    energy: number;
+    social: number;
+    fun: number;
+    comfort: number;
+    purpose: number;
+  } | null;
+  mood: number | null;
+  relationships: readonly {
+    villagerId: string;
+    label: string;
+    affinity: number;
+    familiarity: number;
+  }[];
+  memories: readonly { text: string; about: string | null }[];
+  promises: readonly { text: string; daysLeft: number }[];
+}
+
+async function fetchVillagerCard(villagerId: string): Promise<VillagerCard> {
+  const response = await fetch(`/api/villagers/${encodeURIComponent(villagerId)}`);
+  if (!response.ok) {
+    throw new Error(`GET villager failed: ${response.status}`);
+  }
+  return (await response.json()) as VillagerCard;
+}
+
+/** Kept current by the live updates, which refetch it as the village changes. */
+export function useVillagerCard(villagerId: string) {
+  return useQuery({
+    queryKey: ['villager', villagerId],
+    queryFn: () => fetchVillagerCard(villagerId),
   });
 }

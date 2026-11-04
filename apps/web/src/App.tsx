@@ -1,6 +1,7 @@
 import type { BuildingId, FurnitureKind, MapId } from '@ai-village/content';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ChatPanel } from './ChatPanel.js';
+import { VillagerCardPanel } from './VillagerCardPanel.js';
 import { buildingsWithInteriors } from './interior-draw.js';
 import { InteriorCanvas } from './InteriorCanvas.js';
 import { InboxPanel } from './InboxPanel.js';
@@ -169,6 +170,7 @@ export function App() {
   const [showJournal, setShowJournal] = useState(true);
   const [showInbox, setShowInbox] = useState(false);
   const [chatWith, setChatWith] = useState<string | null>(null);
+  const [cardFor, setCardFor] = useState<string | null>(null);
   const pendingApprovals = usePendingApprovalCount();
   const firstVillagerId = data?.villagers[0]?.id ?? null;
 
@@ -229,7 +231,7 @@ export function App() {
             setInteriorBuildingId(buildingId as BuildingId);
           }}
           onVillagerClick={(villagerId) => {
-            setChatWith(villagerId);
+            setCardFor(villagerId);
           }}
         />
       </div>
@@ -322,10 +324,17 @@ export function App() {
               <ul className="mt-1 flex flex-col gap-1 text-sm">
                 {data.villagers.map((villager) => (
                   <li key={villager.id} className="flex items-center justify-between gap-2">
-                    <span>
+                    <button
+                      type="button"
+                      className="text-left underline decoration-dotted underline-offset-2"
+                      aria-label={`About ${capitalise(villager.id)}`}
+                      onClick={() => {
+                        setCardFor(villager.id);
+                      }}
+                    >
                       {capitalise(villager.id)},{' '}
                       {villager.role === 'mayor' ? 'the mayor' : villager.tradeId}
-                    </span>
+                    </button>
                     <button
                       type="button"
                       className="wood-button text-sm"
@@ -371,7 +380,7 @@ export function App() {
       </div>
 
       <p className="map-text pointer-events-none absolute bottom-3 left-3 z-10 text-sm">
-        Drag or WASD to look around - click a building to go inside, or a villager to chat
+        Drag or WASD to look around - click a building to go inside, or a villager to meet them
       </p>
 
       {interiorBuildingId && (
@@ -423,6 +432,24 @@ export function App() {
               />
             )}
           </div>
+        </Dialog>
+      )}
+
+      {cardFor && (
+        <Dialog
+          title={capitalise(cardFor)}
+          onClose={() => {
+            setCardFor(null);
+          }}
+        >
+          <VillagerCardPanel
+            villagerId={cardFor}
+            where={whereabouts.find((entry) => entry.villager.id === cardFor)?.where ?? null}
+            onChat={() => {
+              setCardFor(null);
+              setChatWith(cardFor);
+            }}
+          />
         </Dialog>
       )}
 

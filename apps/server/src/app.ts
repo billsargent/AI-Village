@@ -2,6 +2,7 @@ import {
   defaultBudgetSettings,
   facts,
   runVillagerChat,
+  villagerCard,
   type ChatLine,
   type ModelClient,
 } from '@ai-village/agent';
@@ -195,6 +196,16 @@ export async function createApp(options: CreateAppOptions = {}) {
   const chats = new Map<string, ChatLine[]>();
   const villagerExists = (id: string) =>
     village.state.villagers.some((villager) => villager.villagerId === id);
+
+  /** Spec section 14's villager card: needs, mood, relationships, memories, promises. */
+  app.get('/api/villagers/:id', (c) => {
+    const id = c.req.param('id');
+    const card = villagerCard(village.state, id);
+    if (!card) {
+      return c.json({ error: `No villager "${id}"` }, 404);
+    }
+    return c.json(card);
+  });
 
   app.get('/api/villagers/:id/chat', (c) => {
     const id = c.req.param('id');

@@ -318,3 +318,8 @@
   at a door going in, or in at the door coming out. Clicking a villager opens
   a chat, and the journal says where everyone is. Reduced motion moves them
   tile by tile without fades (#162).
+- The villager card, opened by clicking a villager on the map or their name
+  in the People list. It shows their portrait, where they are, needs bars
+  with numbers, mood with a word, the people they know, what they remember
+  and their open promises, with a Chat button. It's read from the sim state
+  and kept current by the live updates (#164).

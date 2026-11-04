@@ -503,7 +503,7 @@ export function VillageCanvas({
         <div className="wood-panel pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 px-1 text-lg whitespace-nowrap">
           {hovered.kind === 'building'
             ? `${titleCase(hovered.id)}${clickableBuildingIds?.has(hovered.id) ? ' - click to go inside' : ''}`
-            : `${titleCase(hovered.id)}, ${hovered.where} - click to chat`}
+            : `${titleCase(hovered.id)}, ${hovered.where} - click to meet them`}
         </div>
       )}
       <div className="absolute right-3 bottom-3 z-10 flex gap-1">
