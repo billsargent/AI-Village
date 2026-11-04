@@ -7,6 +7,7 @@ isn't CC0, CC-BY or OFL.
 | File                             | Source                                                                                       | Licence                   |
 | -------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------- |
 | tiles/serene-village-outside.png | Serene Village Revamped (LimeZu, https://limezu.itch.io/serenevillagerevamped)               | CC-BY 4.0 (credit LimeZu) |
+| tiles/serene-village-inside.png  | Serene Village, original (LimeZu, https://limezu.itch.io/serenevillage)                      | CC-BY 4.0 (credit LimeZu) |
 | characters/villager-idle.png     | Ninja Adventure asset pack (pixel-boy, https://pixel-boy.itch.io/ninja-adventure-asset-pack) | CC0                       |
 | characters/villager2.png         | Ninja Adventure asset pack (pixel-boy, https://pixel-boy.itch.io/ninja-adventure-asset-pack) | CC0                       |
 | characters/villager3.png         | Ninja Adventure asset pack (pixel-boy, https://pixel-boy.itch.io/ninja-adventure-asset-pack) | CC0                       |

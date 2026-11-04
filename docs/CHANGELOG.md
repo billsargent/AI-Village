@@ -156,3 +156,16 @@
   actually reachable. An empty side map renders as a real,
   correctly-sized patch of grass (its own `MAPS` dimensions from spec
   section 8), not the main map's arbitrary placeholder box (#118).
+- Interiors: vendors the original Serene Village pack's actual interior
+  sheet into `art/src` (credited in `docs/ART_CREDITS.md`), picks 9
+  furniture sprites off it (bed, nightstand, wardrobe, table, bookshelf,
+  chair, two rugs, a plant) the same deliberate, grid-read way the
+  outdoor building sprites were picked, and gives `cottage` and
+  `town-hall` - the two buildings in the bootstrap scenario - an
+  explicit furniture layout. `apps/web` gets a "Look inside" button per
+  furnished built building, rendering a small fixed-camera PixiJS scene
+  (`InteriorCanvas`) with a way back to the village view. No villagers
+  are drawn inside - there's no assigned-home data yet, so this never
+  guesses who's "home". Every other built building has nowhere to look
+  inside yet, the same precedent as `clocktower`'s missing outdoor
+  sprite (#120).

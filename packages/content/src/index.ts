@@ -12,4 +12,5 @@ export * from './roles.js';
 export * from './prices.js';
 export * from './layout.js';
 export * from './sprites.js';
+export * from './interiors.js';
 export * from './happenings.js';

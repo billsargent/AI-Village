@@ -1,22 +1,12 @@
-import { GRASS_TILE, type MapId, type SpriteFrame } from '@ai-village/content';
-import { Application, Assets, Rectangle, Sprite, Texture, TilingSprite } from 'pixi.js';
+import { GRASS_TILE, type MapId } from '@ai-village/content';
+import { Application, Sprite, TilingSprite } from 'pixi.js';
 import { useEffect, useRef } from 'react';
+import { loadFrameTexture } from './load-frame-texture.js';
 import type { VillageFacts } from './village-api.js';
 import { planCanvasDraw } from './village-draw.js';
 
 /** Integer scaling only, no smoothing (spec section 10). */
 const ZOOM = 3;
-
-async function loadFrameTexture(frame: SpriteFrame): Promise<Texture> {
-  const base = await Assets.load<Texture>({
-    src: `/${frame.file}`,
-    data: { scaleMode: 'nearest' },
-  });
-  return new Texture({
-    source: base.source,
-    frame: new Rectangle(frame.x, frame.y, frame.width, frame.height),
-  });
-}
 
 /**
  * One map (main, Riverside or Forest - spec section 8), drawn with

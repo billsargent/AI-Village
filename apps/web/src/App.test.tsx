@@ -91,6 +91,35 @@ describe('App', () => {
     expect(await screen.findByText('finn is working at (2, 2)')).toBeTruthy();
   });
 
+  it('looks inside a furnished building and back out again', async () => {
+    const facts: VillageFacts = { ...FACTS, builtBuildingIds: ['cottage'] };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(JSON.stringify(facts), { status: 200 }))),
+    );
+    renderApp();
+
+    await screen.findByText(/Moonday, spring day 1/);
+    expect(screen.queryByTestId('interior-canvas')).toBeFalsy();
+
+    fireEvent.click(screen.getByText('Look inside Cottage'));
+
+    expect(await screen.findByTestId('interior-canvas')).toBeTruthy();
+    expect(screen.queryByTestId('village-canvas')).toBeFalsy();
+
+    fireEvent.click(screen.getByText('Back to village'));
+
+    expect(await screen.findByTestId('village-canvas')).toBeTruthy();
+  });
+
+  it("doesn't offer a look-inside button for a building with no furnished layout", async () => {
+    renderApp();
+
+    await screen.findByText(/Moonday, spring day 1/);
+
+    expect(screen.queryByText(/Look inside/)).toBeFalsy();
+  });
+
   it('shows an error when the fetch fails', async () => {
     vi.stubGlobal(
       'fetch',
