@@ -1,5 +1,12 @@
-import { facts, type ModelClient } from '@ai-village/agent';
 import {
+  defaultBudgetSettings,
+  facts,
+  runVillagerChat,
+  type ChatLine,
+  type ModelClient,
+} from '@ai-village/agent';
+import {
+  appendMeter,
   closeDatabase,
   getSettings,
   loadMeterSince,
@@ -78,6 +85,10 @@ const setSpeedSchema = z.object({ speed: clockSpeedSchema });
 const decideSchema = z.object({ decision: z.enum(['approved', 'declined']) });
 /** How many past decisions the inbox shows alongside what's pending. */
 const RECENT_DECISIONS = 10;
+/** A chat message from the owner: long enough for a real question, short enough to stay cheap. */
+const chatMessageSchema = z.object({ message: z.string().trim().min(1).max(1000) });
+/** How many lines of each villager's chat the server keeps (the prompt sends only the last 10). */
+const CHAT_LINES_KEPT = 50;
 
 export interface CreateAppOptions {
   /** Overridable for tests, so each test instance gets its own SQLite file. */
@@ -175,6 +186,81 @@ export async function createApp(options: CreateAppOptions = {}) {
       // changed, and the request is still pending for the owner to decline.
       return c.json({ error: error instanceof Error ? error.message : String(error) }, 409);
     }
+  });
+
+  /**
+   * Each villager's chat with the owner, kept while the server runs. Not
+   * saved to the database yet: a restart starts every conversation fresh.
+   */
+  const chats = new Map<string, ChatLine[]>();
+  const villagerExists = (id: string) =>
+    village.state.villagers.some((villager) => villager.villagerId === id);
+
+  app.get('/api/villagers/:id/chat', (c) => {
+    const id = c.req.param('id');
+    if (!villagerExists(id)) {
+      return c.json({ error: `No villager "${id}"` }, 404);
+    }
+    return c.json({ lines: chats.get(id) ?? [] });
+  });
+
+  /**
+   * Spec section 11's "Chat with the owner": `{ message }` in, the
+   * villager's reply out. Needs only a key - the owner's own chats are
+   * never stopped by the monthly ceiling (spec section 16). The village
+   * holds still while the villager answers, and the call is metered.
+   */
+  app.post('/api/villagers/:id/chat', async (c) => {
+    const id = c.req.param('id');
+    if (!villagerExists(id)) {
+      return c.json({ error: `No villager "${id}"` }, 404);
+    }
+    const body: unknown = await c.req.json().catch(() => null);
+    const parsed = chatMessageSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: 'message must be 1 to 1000 characters' }, 400);
+    }
+    const settings = await getSettings(db);
+    if (settings.deepseekApiKey === null) {
+      return c.json({ error: 'Save a DeepSeek API key in Settings to chat' }, 400);
+    }
+
+    const history = chats.get(id) ?? [];
+    const ownerLine: ChatLine = { from: 'owner', text: parsed.data.message, at: now() };
+    const meter = await loadMeterSince(db, now() - BUDGET_WINDOW_MS);
+    const client = (options.makeModelClient ?? ((apiKey) => createDeepSeekClient({ apiKey })))(
+      settings.deepseekApiKey,
+    );
+    const budget = defaultBudgetSettings(settings.monthlyCeilingUsd ?? Number.POSITIVE_INFINITY);
+
+    // Filled in by the turn; an object so TS sees the writes made inside the callback.
+    const outcome = { reply: null as ChatLine | null, approvalRequested: false };
+    try {
+      await village.takeTurn(async (state, inbox) => {
+        const result = await runVillagerChat(
+          client,
+          state,
+          inbox,
+          id,
+          parsed.data.message,
+          history,
+          meter,
+          budget,
+        );
+        await appendMeter(db, result.meter.slice(meter.length));
+        outcome.reply = { from: 'villager', text: result.reply, at: now() };
+        outcome.approvalRequested = result.approvalRequested ?? false;
+        return { state: result.state, inbox: result.inbox };
+      });
+    } catch (error) {
+      console.error('AI-Village: a chat turn failed', error);
+      return c.json({ error: "Couldn't reach the model just now - try again in a moment." }, 502);
+    }
+    const lines = [...history, ownerLine, ...(outcome.reply ? [outcome.reply] : [])].slice(
+      -CHAT_LINES_KEPT,
+    );
+    chats.set(id, lines);
+    return c.json({ lines, approvalRequested: outcome.approvalRequested });
   });
 
   /**

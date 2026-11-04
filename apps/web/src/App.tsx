@@ -1,5 +1,6 @@
 import type { BuildingId, FurnitureKind, MapId } from '@ai-village/content';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { ChatPanel } from './ChatPanel.js';
 import { buildingsWithInteriors } from './interior-draw.js';
 import { InteriorCanvas } from './InteriorCanvas.js';
 import { InboxPanel } from './InboxPanel.js';
@@ -167,7 +168,31 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showJournal, setShowJournal] = useState(true);
   const [showInbox, setShowInbox] = useState(false);
+  const [chatWith, setChatWith] = useState<string | null>(null);
   const pendingApprovals = usePendingApprovalCount();
+  const firstVillagerId = data?.villagers[0]?.id ?? null;
+
+  // Spec section 14's keys: C opens the chat (with the first villager), I the inbox.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) {
+        return;
+      }
+      if (event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+      }
+      if (event.key === 'c' && firstVillagerId) {
+        setChatWith((current) => current ?? firstVillagerId);
+      } else if (event.key === 'i') {
+        setShowInbox(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [firstVillagerId]);
 
   if (isPending) {
     return (
@@ -290,6 +315,29 @@ export function App() {
               </section>
             )}
             <section>
+              <h2 className="text-lg">People</h2>
+              <ul className="mt-1 flex flex-col gap-1 text-sm">
+                {data.villagers.map((villager) => (
+                  <li key={villager.id} className="flex items-center justify-between gap-2">
+                    <span>
+                      {capitalise(villager.id)},{' '}
+                      {villager.role === 'mayor' ? 'the mayor' : villager.tradeId}
+                    </span>
+                    <button
+                      type="button"
+                      className="wood-button text-sm"
+                      aria-label={`Chat with ${capitalise(villager.id)}`}
+                      onClick={() => {
+                        setChatWith(villager.id);
+                      }}
+                    >
+                      Chat
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+            <section>
               <h2 className="text-lg">Right now</h2>
               {whereabouts.length > 0 ? (
                 <ul className="list-disc pl-5 text-sm">
@@ -372,6 +420,20 @@ export function App() {
               />
             )}
           </div>
+        </Dialog>
+      )}
+
+      {chatWith && (
+        <Dialog
+          title={`Chat with ${capitalise(chatWith)}`}
+          onClose={() => {
+            setChatWith(null);
+          }}
+        >
+          <ChatPanel
+            villagerId={chatWith}
+            tradeId={data.villagers.find((villager) => villager.id === chatWith)?.tradeId ?? ''}
+          />
         </Dialog>
       )}
 

@@ -436,3 +436,71 @@ describe("the Mayor's settings", () => {
     expect(saved).toEqual([{ monthlyCeilingUsd: 2 }, { mayorAutonomy: true }]);
   });
 });
+
+describe('chatting with a villager', () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const SETTINGS = {
+    hasDeepseekApiKey: true,
+    mayorAutonomy: false,
+    monthlyCeilingUsd: null,
+    spentThisMonthUsd: 0,
+    mayorLastTurn: null,
+  };
+
+  it('opens a chat from the People list, sends a message and shows the reply', async () => {
+    const sent: unknown[] = [];
+    let lines: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      fetchServing(FACTS, {
+        '/api/settings': () => SETTINGS,
+        '/api/villagers/hesper/chat': (init) => {
+          if (init?.method === 'POST') {
+            sent.push(JSON.parse(init.body as string));
+            lines = [
+              { from: 'owner', text: 'Any bread today?', at: 1 },
+              { from: 'villager', text: 'Twelve loaves, fresh this morning.', at: 2 },
+            ];
+            return { lines, approvalRequested: false };
+          }
+          return { lines };
+        },
+      }),
+    );
+    renderApp();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Chat with Hesper' }));
+    expect(await screen.findByText('Say hello to Hesper.')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Message to Hesper'), {
+      target: { value: 'Any bread today?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(await screen.findByText('Twelve loaves, fresh this morning.')).toBeTruthy();
+    expect(sent).toEqual([{ message: 'Any bread today?' }]);
+    expect(screen.getByLabelText<HTMLInputElement>('Message to Hesper').value).toBe('');
+  });
+
+  it('points to Settings instead of offering a message box when no key is saved', async () => {
+    vi.stubGlobal(
+      'fetch',
+      fetchServing(FACTS, {
+        '/api/settings': () => ({ ...SETTINGS, hasDeepseekApiKey: false }),
+        '/api/villagers/hesper/chat': () => ({ lines: [] }),
+      }),
+    );
+    renderApp();
+    await screen.findByRole('button', { name: 'Chat with Hesper' });
+
+    fireEvent.keyDown(window, { key: 'c' });
+    expect(
+      await screen.findByText('Save a DeepSeek API key in Settings to chat with Hesper.'),
+    ).toBeTruthy();
+    expect(screen.queryByLabelText('Message to Hesper')).toBeNull();
+  });
+});
