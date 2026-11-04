@@ -1,5 +1,5 @@
 import type { DayPhase } from '@ai-village/content';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 /**
  * Mirrors `@ai-village/agent`'s `FactsSnapshot` - this package can't
@@ -60,4 +60,65 @@ async function fetchVillageFacts(): Promise<VillageFacts> {
 
 export function useVillageFacts() {
   return useQuery({ queryKey: ['village'], queryFn: fetchVillageFacts });
+}
+
+/**
+ * Whether the owner's DeepSeek API key is set - never the key value
+ * itself, which the server never sends to the browser (see
+ * `apps/server/src/app.ts`'s `/api/settings` routes).
+ */
+export interface SettingsStatus {
+  hasDeepseekApiKey: boolean;
+}
+
+async function fetchSettingsStatus(): Promise<SettingsStatus> {
+  const response = await fetch('/api/settings');
+  if (!response.ok) {
+    throw new Error(`GET /api/settings failed: ${response.status}`);
+  }
+  return (await response.json()) as SettingsStatus;
+}
+
+export function useSettingsStatus() {
+  return useQuery({ queryKey: ['settings'], queryFn: fetchSettingsStatus });
+}
+
+async function saveDeepseekApiKey(deepseekApiKey: string): Promise<SettingsStatus> {
+  const response = await fetch('/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ deepseekApiKey }),
+  });
+  if (!response.ok) {
+    throw new Error(`POST /api/settings failed: ${response.status}`);
+  }
+  return (await response.json()) as SettingsStatus;
+}
+
+export function useSaveDeepseekApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: saveDeepseekApiKey,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
+  });
+}
+
+async function clearDeepseekApiKey(): Promise<SettingsStatus> {
+  const response = await fetch('/api/settings', { method: 'DELETE' });
+  if (!response.ok) {
+    throw new Error(`DELETE /api/settings failed: ${response.status}`);
+  }
+  return (await response.json()) as SettingsStatus;
+}
+
+export function useClearDeepseekApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: clearDeepseekApiKey,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
+  });
 }

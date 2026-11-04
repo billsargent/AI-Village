@@ -6,7 +6,7 @@ import { createApp } from './app.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 
-const { app } = createApp();
+const { app } = await createApp();
 
 serve({ fetch: app.fetch, port: PORT }, (info) => {
   console.log(`AI-Village server listening on http://localhost:${info.port}`);

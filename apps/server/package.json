@@ -18,7 +18,8 @@
     "@ai-village/sim": "workspace:*",
     "@hono/node-server": "^2.1.5",
     "@libsql/client": "^0.14.0",
-    "hono": "^4.13.14"
+    "hono": "^4.13.14",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "tsx": "^4.23.15"

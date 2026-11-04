@@ -2,6 +2,7 @@ import type { BuildingId, FurnitureKind, MapId } from '@ai-village/content';
 import { useState } from 'react';
 import { buildingsWithInteriors } from './interior-draw.js';
 import { InteriorCanvas } from './InteriorCanvas.js';
+import { SettingsPanel } from './SettingsPanel.js';
 import { useVillageFacts } from './village-api.js';
 import { VillageCanvas } from './VillageCanvas.js';
 import { whereaboutsNow } from './village-draw.js';
@@ -49,6 +50,7 @@ export function App() {
   const [showTreasury, setShowTreasury] = useState(false);
   const [showStores, setShowStores] = useState(false);
   const [showAlmanac, setShowAlmanac] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   if (isPending) {
     return <p className="p-4 text-slate-600">Loading the village...</p>;
@@ -73,6 +75,18 @@ export function App() {
       </p>
       <p>Population: {data.population}</p>
       <p>Treasury: {data.treasuryCoins} coins</p>
+      <div className="mt-2">
+        <button
+          type="button"
+          onClick={() => {
+            setShowSettings((shown) => !shown);
+          }}
+          className="rounded bg-slate-200 px-3 py-1 text-slate-900"
+        >
+          Settings
+        </button>
+      </div>
+      {showSettings && <SettingsPanel />}
       {interiorBuildingId ? (
         <>
           <div className="mt-2">

@@ -251,3 +251,14 @@
   API key, which stays out of server code by standing policy until
   there's an established story for where a production key comes from
   (#140).
+- The owner's DeepSeek API key, with a settings UI and a new `settings`
+  table in `packages/db`. The spec is explicit that secrets belong in
+  the OS keychain, never the database or the browser - flagged that
+  conflict, and the owner explicitly chose to store it in the database
+  anyway, a deliberate session decision called out plainly in code
+  rather than silently matching the spec. Defense in depth stays:
+  `apps/server`'s `/api/settings` routes (`GET`/`POST`/`DELETE`) never
+  send the key's value back to the browser, only whether one is set.
+  `createApp` is now async and opens a real SQLite database for the
+  first time. Settings storage only - doesn't wire `runMayorDay` (#140)
+  into a live loop (#142).
