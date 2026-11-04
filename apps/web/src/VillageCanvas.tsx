@@ -301,31 +301,31 @@ export function VillageCanvas({
       className="relative h-full w-full overflow-hidden"
     >
       {hovered && (
-        <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 rounded bg-black/60 px-3 py-1 text-sm text-white">
+        <div className="wood-panel pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 px-1 text-lg whitespace-nowrap">
           {titleCase(hovered)}
           {clickableBuildingIds?.has(hovered) ? ' - click to go inside' : ''}
         </div>
       )}
-      <div className="absolute right-3 bottom-3 flex flex-col gap-1">
-        <button
-          type="button"
-          aria-label="Zoom in"
-          onClick={() => {
-            zoomByRef.current?.(1);
-          }}
-          className="h-8 w-8 rounded bg-black/50 text-lg leading-none text-white hover:bg-black/70"
-        >
-          +
-        </button>
+      <div className="absolute right-3 bottom-3 z-10 flex gap-1">
         <button
           type="button"
           aria-label="Zoom out"
           onClick={() => {
             zoomByRef.current?.(-1);
           }}
-          className="h-8 w-8 rounded bg-black/50 text-lg leading-none text-white hover:bg-black/70"
+          className="wood-button w-10 text-xl"
         >
           -
+        </button>
+        <button
+          type="button"
+          aria-label="Zoom in"
+          onClick={() => {
+            zoomByRef.current?.(1);
+          }}
+          className="wood-button w-10 text-xl"
+        >
+          +
         </button>
       </div>
     </div>

@@ -15,12 +15,11 @@ export function SettingsPanel() {
   const [input, setInput] = useState('');
 
   return (
-    <div className="mt-2 max-w-md rounded border border-slate-300 bg-white p-3">
-      <h2 className="font-semibold">Settings</h2>
+    <div className="w-96 max-w-full">
       {isPending ? (
-        <p className="mt-2 text-slate-600">Loading...</p>
+        <p className="text-ink-soft">Loading...</p>
       ) : (
-        <p className="mt-2 text-sm text-slate-600">
+        <p className="text-ink-soft">
           DeepSeek API key: {data?.hasDeepseekApiKey ? 'set' : 'not set'}
         </p>
       )}
@@ -45,12 +44,13 @@ export function SettingsPanel() {
             setInput(event.target.value);
           }}
           placeholder="sk-..."
-          className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1"
+          aria-label="DeepSeek API key"
+          className="min-w-0 flex-1 border-2 border-ink-soft bg-[#fffaf0] px-2 py-1 font-sans"
         />
         <button
           type="submit"
           disabled={saveKey.isPending || input.trim().length === 0}
-          className="rounded bg-slate-700 px-3 py-1 text-white disabled:opacity-50"
+          className="wood-button"
         >
           Save
         </button>
@@ -61,14 +61,14 @@ export function SettingsPanel() {
             onClick={() => {
               clearKey.mutate();
             }}
-            className="rounded bg-slate-200 px-3 py-1 text-slate-900 disabled:opacity-50"
+            className="wood-button"
           >
             Clear
           </button>
         )}
       </form>
-      {saveKey.isError && <p className="mt-2 text-sm text-red-700">Couldn't save the key.</p>}
-      {clearKey.isError && <p className="mt-2 text-sm text-red-700">Couldn't clear the key.</p>}
+      {saveKey.isError && <p className="mt-2 text-sm text-red-800">Couldn't save the key.</p>}
+      {clearKey.isError && <p className="mt-2 text-sm text-red-800">Couldn't clear the key.</p>}
     </div>
   );
 }
