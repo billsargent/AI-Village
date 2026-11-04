@@ -34,6 +34,8 @@ export const RUG_BIG = insideTileRect(6, 11, 3, 3);
 export const PLANT = insideTileRect(0, 12, 1, 1);
 /** A compact wood-banded trunk, the closest match on the sheet to spec section 9's "treasury chest". */
 export const CHEST = insideTileRect(1, 16, 1, 1);
+/** A single standing closed book, for spec section 9's "almanac". */
+export const BOOK = insideTileRect(0, 15, 1, 1);
 
 /**
  * What a picked furniture sprite actually is, independent of which
@@ -42,7 +44,16 @@ export const CHEST = insideTileRect(1, 16, 1, 1);
  * desk"), not to a building+position pair.
  */
 export type FurnitureKind =
-  'bed' | 'nightstand' | 'wardrobe' | 'table' | 'bookshelf' | 'chair' | 'rug' | 'plant' | 'chest';
+  | 'bed'
+  | 'nightstand'
+  | 'wardrobe'
+  | 'table'
+  | 'bookshelf'
+  | 'chair'
+  | 'rug'
+  | 'plant'
+  | 'chest'
+  | 'book';
 
 const KIND_BY_SPRITE = new Map<SpriteFrame, FurnitureKind>([
   [BED, 'bed'],
@@ -56,6 +67,7 @@ const KIND_BY_SPRITE = new Map<SpriteFrame, FurnitureKind>([
   [RUG_BIG, 'rug'],
   [PLANT, 'plant'],
   [CHEST, 'chest'],
+  [BOOK, 'book'],
 ]);
 
 /** The kind of a sprite picked above, for code that cares what a piece of furniture *is*, not just how to draw it. */
@@ -101,6 +113,7 @@ export const INTERIOR_LAYOUTS: Partial<Record<BuildingId, readonly InteriorItem[
     { sprite: BOOKSHELF, x: 4, y: 3 },
     { sprite: PLANT, x: 0, y: 3 },
     { sprite: CHEST, x: 6, y: 0 },
+    { sprite: BOOK, x: 7, y: 0 },
   ],
   inn: [
     { sprite: BED, x: 0, y: 0 },

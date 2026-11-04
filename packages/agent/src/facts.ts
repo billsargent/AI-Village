@@ -1,10 +1,12 @@
 import { DEFAULT_ROLE } from '@ai-village/content';
 import {
   calendarDateFromMinute,
+  FESTIVALS,
   getBalance,
   publicChronicle,
   type ChronicleEntry,
   type DayPhase,
+  type Festival,
   type VillageState,
 } from '@ai-village/sim';
 
@@ -47,6 +49,8 @@ export interface FactsSnapshot {
   treasuryDeltaYesterday: number;
   /** The most recent public chronicle entries, most recent first. */
   recentChronicle: readonly ChronicleEntry[];
+  /** The village's four fixed seasonal festivals (spec section 5) - the almanac's calendar. */
+  festivals: readonly Festival[];
 }
 
 const VILLAGE_ACCOUNT = 'village';
@@ -119,6 +123,7 @@ export function facts(state: VillageState, _viewer: string, _purpose: string): F
     treasuryCoins: getBalance(state.ledger, TREASURY_ACCOUNT, COINS),
     treasuryDeltaYesterday: treasuryDeltaYesterday(state),
     recentChronicle: publicChronicle(state.chronicle).slice(-RECENT_CHRONICLE_LIMIT).reverse(),
+    festivals: FESTIVALS,
   };
 }
 

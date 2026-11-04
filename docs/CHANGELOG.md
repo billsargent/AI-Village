@@ -205,3 +205,10 @@
   opens a Stores panel listing `VillageFacts.stores` (good id ->
   quantity), fetched since the server's first version but never shown
   anywhere until now (#130).
+- Town hall's third clickable piece: a single-book sprite picked from
+  the interior sheet is its "almanac" (spec section 9: "Calendar").
+  `FactsSnapshot`/`VillageFacts` gained `festivals` - the four fixed
+  seasonal festivals (`@ai-village/sim`'s `FESTIVALS`), real static sim
+  data that had never been surfaced to the web client before. The
+  almanac panel shows today's date and the full festival calendar,
+  marking today's festival if one is running (#132).
