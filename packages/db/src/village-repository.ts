@@ -17,6 +17,8 @@ export interface ClockRow {
   paused: boolean;
   storytellerStyle: string;
   daysSinceLastHappening: number;
+  /** Wall-clock ms of the last save, or null for a village saved before this was recorded. */
+  savedAtRealMs: number | null;
 }
 
 export interface VillagerRow {
@@ -251,6 +253,7 @@ export async function loadVillage(db: Database): Promise<VillageSnapshot | null>
       paused: clockRow.paused,
       storytellerStyle: clockRow.storytellerStyle,
       daysSinceLastHappening: clockRow.daysSinceLastHappening,
+      savedAtRealMs: clockRow.savedAtRealMs,
     },
     builtBuildingIds: builtBuildingRows.map((row) => row.buildingId),
     villagers: villagerRows,

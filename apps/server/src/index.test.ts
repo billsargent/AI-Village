@@ -5,11 +5,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
 
 const tempDirs: string[] = [];
-const closers: (() => void)[] = [];
+const closers: (() => Promise<void>)[] = [];
 
-afterEach(() => {
+afterEach(async () => {
   for (const close of closers.splice(0)) {
-    close();
+    await close();
   }
   for (const dir of tempDirs.splice(0)) {
     try {
@@ -137,5 +137,154 @@ describe('/api/settings', () => {
     const response = await second.app.request('/api/settings');
 
     expect(await response.json()).toEqual({ hasDeepseekApiKey: true });
+  });
+});
+
+/** A fake wall clock the test moves by hand. */
+function fakeClock(start = 1_800_000_000_000) {
+  let now = start;
+  return {
+    now: () => now,
+    advance: (ms: number) => {
+      now += ms;
+    },
+  };
+}
+
+const REAL_MS_PER_VILLAGE_HOUR = 10 * 60_000;
+
+async function createLiveTestApp(dbPath?: string, clock = fakeClock()) {
+  let path = dbPath;
+  if (!path) {
+    const dir = mkdtempSync(join(tmpdir(), 'ai-village-server-test-'));
+    tempDirs.push(dir);
+    path = join(dir, 'village.db');
+  }
+  const created = await createApp({ dbPath: path, now: clock.now });
+  closers.push(created.closeDb);
+  return { ...created, clock, dbPath: path };
+}
+
+describe('the live village', () => {
+  it("settles the first day's systems as soon as it starts", async () => {
+    const { getState } = await createLiveTestApp();
+    expect(getState().weatherHistory.map((d) => d.day)).toEqual([0]);
+  });
+
+  it('moves the village clock with real time on every tick', async () => {
+    const { village, getState, clock } = await createLiveTestApp();
+    const before = getState().clock.minute;
+    clock.advance(REAL_MS_PER_VILLAGE_HOUR);
+    await village.tick();
+    expect(getState().clock.minute).toBeCloseTo(before + 60);
+  });
+
+  it('settles the next day when the clock reaches it', async () => {
+    const { village, getState, clock } = await createLiveTestApp();
+    // Bootstrap starts at 09:00 on day 0; 15 village hours later it's day 1.
+    clock.advance(15 * REAL_MS_PER_VILLAGE_HOUR);
+    const change = await village.tick();
+    expect(change.settled.map((r) => r.day)).toEqual([1]);
+    expect(getState().weatherHistory.map((d) => d.day)).toEqual([0, 1]);
+  });
+
+  it('survives a restart, catching up for the time it was closed', async () => {
+    const clock = fakeClock();
+    const first = await createLiveTestApp(undefined, clock);
+    clock.advance(2 * REAL_MS_PER_VILLAGE_HOUR);
+    await first.village.tick();
+    const minuteAtClose = first.getState().clock.minute;
+    await first.village.save();
+    await first.closeDb();
+    closers.splice(closers.indexOf(first.closeDb), 1);
+
+    // Closed for one real village hour's worth of time.
+    clock.advance(REAL_MS_PER_VILLAGE_HOUR);
+    const second = await createLiveTestApp(first.dbPath, clock);
+    expect(second.getState().clock.minute).toBeCloseTo(minuteAtClose + 60);
+  });
+});
+
+describe('/api/clock', () => {
+  it('reports the clock running at 1x to start with', async () => {
+    const { app } = await createLiveTestApp();
+    const response = await app.request('/api/clock');
+    expect(await response.json()).toEqual({ speed: 1, paused: false });
+  });
+
+  it('pauses the village, which then stays put however much time passes', async () => {
+    const { app, village, getState, clock } = await createLiveTestApp();
+    const response = await app.request('/api/clock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ speed: 0 }),
+    });
+    expect(await response.json()).toEqual({ speed: 0, paused: true });
+
+    const minute = getState().clock.minute;
+    clock.advance(10 * REAL_MS_PER_VILLAGE_HOUR);
+    await village.tick();
+    expect(getState().clock.minute).toBe(minute);
+  });
+
+  it('runs 4x faster at speed 4', async () => {
+    const { app, village, getState, clock } = await createLiveTestApp();
+    await app.request('/api/clock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ speed: 4 }),
+    });
+    const minute = getState().clock.minute;
+    clock.advance(REAL_MS_PER_VILLAGE_HOUR);
+    await village.tick();
+    expect(getState().clock.minute).toBeCloseTo(minute + 240);
+  });
+
+  it('rejects a speed the spec has no button for', async () => {
+    const { app } = await createLiveTestApp();
+    const response = await app.request('/api/clock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ speed: 3 }),
+    });
+    expect(response.status).toBe(400);
+  });
+});
+
+describe('GET /api/events', () => {
+  async function readEvent(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<string> {
+    const decoder = new TextDecoder();
+    let text = '';
+    while (!text.includes('\n\n')) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value);
+    }
+    return text;
+  }
+
+  it('sends the village straight away, then again when a village minute passes', async () => {
+    const { app, village, clock } = await createLiveTestApp();
+    const response = await app.request('/api/events');
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    const reader = response.body?.getReader();
+    expect(reader).toBeDefined();
+    if (!reader) return;
+
+    const first = await readEvent(reader);
+    expect(first).toContain('event: village');
+    const payload = JSON.parse(/data: (.*)/.exec(first)?.[1] ?? '{}') as {
+      facts: { hour: number };
+      clock: { speed: number };
+    };
+    expect(payload.facts.hour).toBe(9);
+    expect(payload.clock.speed).toBe(1);
+
+    clock.advance(REAL_MS_PER_VILLAGE_HOUR);
+    await village.tick();
+    const second = await readEvent(reader);
+    expect(second).toContain('"hour":10');
+
+    await reader.cancel();
   });
 });

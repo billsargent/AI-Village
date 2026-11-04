@@ -42,6 +42,7 @@ const SAMPLE_SNAPSHOT: VillageSnapshot = {
     paused: false,
     storytellerStyle: 'lively',
     daysSinceLastHappening: 2,
+    savedAtRealMs: 1_700_000_000_000,
   },
   builtBuildingIds: ['town-hall', 'fields', 'fields'],
   villagers: [{ id: 'ada', tradeId: 'farmer', skillLevel: 2, hasTool: true, role: 'villager' }],

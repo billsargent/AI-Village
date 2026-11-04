@@ -283,3 +283,9 @@
   / `catchUpLiveClock` advance the clock by real time and settle each
   day as it begins. An empty treasury no longer throws: work goes
   unpaid, upkeep pays what it can, and the chronicle says so (#148).
+- A live server: the village is loaded from and saved to SQLite (with
+  capped catch-up for time away), a `LiveVillage` ticks its clock on
+  real time, `/api/clock` sets pause/1x/2x/4x, and `/api/events`
+  streams the facts to the browser as server-sent events. The canvas
+  sets up its ground once per map and rebuilds only what stands on it,
+  depth-sorted by `zIndex`, leaving room for villagers that move (#150).

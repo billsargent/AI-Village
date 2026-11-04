@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App.js';
 import type { VillageFacts } from './village-api.js';
@@ -213,6 +213,44 @@ describe('App', () => {
     renderApp();
 
     expect(await screen.findByText(/Couldn't reach the village/)).toBeTruthy();
+  });
+
+  it("changes the clock's speed from the clock panel", async () => {
+    let clock = { speed: 1, paused: false };
+    const posted: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        if (url.includes('/api/clock')) {
+          if (init?.method === 'POST') {
+            const body = JSON.parse(init.body as string) as { speed: number };
+            posted.push(body);
+            clock = { speed: body.speed, paused: body.speed === 0 };
+          }
+          return Promise.resolve(new Response(JSON.stringify(clock), { status: 200 }));
+        }
+        return Promise.resolve(new Response(JSON.stringify(FACTS), { status: 200 }));
+      }),
+    );
+    renderApp();
+
+    await screen.findByLabelText(/Moonday, spring day 1/);
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Normal speed' }).getAttribute('aria-pressed'),
+      ).toBe('true');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Pause' }).getAttribute('aria-pressed')).toBe(
+        'true',
+      );
+    });
+    expect(posted).toEqual([{ speed: 0 }]);
   });
 
   describe('Settings', () => {

@@ -57,6 +57,13 @@
       "when": 1793806589439,
       "tag": "0007_nasty_karma",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1793821937656,
+      "tag": "0008_colossal_randall_flagg",
+      "breakpoints": true
     }
   ]
 }

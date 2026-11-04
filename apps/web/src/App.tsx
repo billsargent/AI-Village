@@ -3,7 +3,14 @@ import { useState, type ReactNode } from 'react';
 import { buildingsWithInteriors } from './interior-draw.js';
 import { InteriorCanvas } from './InteriorCanvas.js';
 import { SettingsPanel } from './SettingsPanel.js';
-import { useVillageFacts, type VillageFacts } from './village-api.js';
+import {
+  useClockStatus,
+  useLiveUpdates,
+  useSetClockSpeed,
+  useVillageFacts,
+  type ClockSpeed,
+  type VillageFacts,
+} from './village-api.js';
 import { VillageCanvas } from './VillageCanvas.js';
 import { whereaboutsNow } from './village-draw.js';
 
@@ -112,12 +119,46 @@ function Clock({ data }: { data: VillageFacts }) {
         <img src="/ui/coin.png" alt="" className="h-[21px] w-[21px] [image-rendering:pixelated]" />
         {data.treasuryCoins}
       </div>
+      <SpeedControls />
+    </div>
+  );
+}
+
+const SPEEDS: readonly { speed: ClockSpeed; label: string; name: string }[] = [
+  { speed: 0, label: 'II', name: 'Pause' },
+  { speed: 1, label: '1x', name: 'Normal speed' },
+  { speed: 2, label: '2x', name: 'Double speed' },
+  { speed: 4, label: '4x', name: 'Four times speed' },
+];
+
+/** Spec section 14's speed controls: pause, 1x, 2x, 4x. */
+function SpeedControls() {
+  const { data: clock } = useClockStatus();
+  const setSpeed = useSetClockSpeed();
+  return (
+    <div className="mt-1 flex justify-center gap-1" role="group" aria-label="Clock speed">
+      {SPEEDS.map(({ speed, label, name }) => (
+        <button
+          key={speed}
+          type="button"
+          aria-label={name}
+          aria-pressed={clock?.speed === speed}
+          disabled={setSpeed.isPending}
+          onClick={() => {
+            setSpeed.mutate(speed);
+          }}
+          className="wood-button w-10 text-sm"
+        >
+          {label}
+        </button>
+      ))}
     </div>
   );
 }
 
 export function App() {
   const { data, isPending, isError, error } = useVillageFacts();
+  useLiveUpdates();
   const [map, setMap] = useState<MapId>('main');
   const [interiorBuildingId, setInteriorBuildingId] = useState<BuildingId | null>(null);
   const [panel, setPanel] = useState<FurniturePanel | null>(null);
