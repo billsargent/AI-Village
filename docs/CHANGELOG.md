@@ -169,3 +169,11 @@
   guesses who's "home". Every other built building has nowhere to look
   inside yet, the same precedent as `clocktower`'s missing outdoor
   sprite (#120).
+- Interiors for `inn` (two guest beds in different colours, a
+  nightstand, rug and plant), `school` (two desks with chairs, a
+  bookshelf, a rug), `post-office` (a desk, chair, bookshelf and plant)
+  and `shop` (a counter, two shelves, rug and plant) - all reusing the
+  same generic furniture picked for #120. Buildings needing furniture
+  that isn't vendored yet (bakery's oven, smithy's forge, chapel's
+  pews, mill's millstones, workshop's workbench) are still left
+  without an interior rather than a misrepresented one (#122).

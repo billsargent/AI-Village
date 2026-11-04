@@ -18,8 +18,12 @@ describe('planInteriorDraw', () => {
     expect(planInteriorDraw('smithy')).toBeUndefined();
   });
 
-  it('has a layout for town-hall too', () => {
+  it('has a layout for town-hall, inn, school, post-office and shop too', () => {
     expect(planInteriorDraw('town-hall')).toBeDefined();
+    expect(planInteriorDraw('inn')).toBeDefined();
+    expect(planInteriorDraw('school')).toBeDefined();
+    expect(planInteriorDraw('post-office')).toBeDefined();
+    expect(planInteriorDraw('shop')).toBeDefined();
   });
 });
 

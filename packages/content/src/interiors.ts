@@ -23,6 +23,7 @@ function insideTileRect(x: number, y: number, width: number, height: number): Sp
  * entry below are named here.
  */
 export const BED = insideTileRect(0, 18, 2, 2);
+export const BED_PINK = insideTileRect(2, 18, 2, 2);
 export const NIGHTSTAND = insideTileRect(2, 9, 1, 2);
 export const WARDROBE = insideTileRect(2, 10, 2, 2);
 export const TABLE = insideTileRect(2, 12, 2, 2);
@@ -69,5 +70,33 @@ export const INTERIOR_LAYOUTS: Partial<Record<BuildingId, readonly InteriorItem[
     { sprite: CHAIR, x: 4, y: 2 },
     { sprite: BOOKSHELF, x: 4, y: 3 },
     { sprite: PLANT, x: 0, y: 3 },
+  ],
+  inn: [
+    { sprite: BED, x: 0, y: 0 },
+    { sprite: NIGHTSTAND, x: 2, y: 0 },
+    { sprite: BED_PINK, x: 3, y: 0 },
+    { sprite: RUG_SMALL, x: 0, y: 3 },
+    { sprite: PLANT, x: 5, y: 1 },
+  ],
+  school: [
+    { sprite: BOOKSHELF, x: 0, y: 0 },
+    { sprite: TABLE, x: 3, y: 0 },
+    { sprite: CHAIR, x: 3, y: 2 },
+    { sprite: TABLE, x: 6, y: 0 },
+    { sprite: CHAIR, x: 6, y: 2 },
+    { sprite: RUG_SMALL, x: 0, y: 3 },
+  ],
+  'post-office': [
+    { sprite: TABLE, x: 0, y: 0 },
+    { sprite: CHAIR, x: 0, y: 2 },
+    { sprite: BOOKSHELF, x: 3, y: 0 },
+    { sprite: PLANT, x: 3, y: 3 },
+  ],
+  shop: [
+    { sprite: TABLE, x: 0, y: 0 },
+    { sprite: BOOKSHELF, x: 3, y: 0 },
+    { sprite: BOOKSHELF, x: 5, y: 0 },
+    { sprite: RUG_SMALL, x: 0, y: 3 },
+    { sprite: PLANT, x: 7, y: 0 },
   ],
 };
