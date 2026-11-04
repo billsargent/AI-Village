@@ -9,7 +9,7 @@ import {
   openAndMigrate,
   saveVillage,
 } from '@ai-village/db';
-import { apply, runVillageDays } from '@ai-village/sim';
+import { apply, createVillage, pickTraits, runVillageDays } from '@ai-village/sim';
 import { afterEach, describe, expect, it } from 'vitest';
 import { fromSnapshot, toSnapshot } from './village-persistence.js';
 
@@ -99,5 +99,40 @@ describe('village persistence round trip', () => {
     expect(reloaded.memory.memories).toEqual(state.memory.memories);
     expect(reloaded.promises.promises).toEqual(state.promises.promises);
     expect(reloaded.workRequests.requests).toEqual(state.workRequests.requests);
+  });
+
+  it('keeps traits in the order given, and gives a villager saved before traits existed their own', async () => {
+    const state = createVillage(9, {
+      villagers: [
+        {
+          villagerId: 'tobin',
+          tradeId: 'baker',
+          skillLevel: 1,
+          hasTool: false,
+          moodFactor: 1,
+          traits: ['tidy', 'grumpy', 'cheerful'],
+        },
+        { villagerId: 'ada', tradeId: 'farmer', skillLevel: 1, hasTool: false, moodFactor: 1 },
+      ],
+    });
+    tempDir = mkdtempSync(join(tmpdir(), 'ai-village-persistence-test-'));
+    const { db, client } = await openAndMigrate(
+      join(tempDir, 'village.db'),
+      migrationsFolderPath(),
+    );
+    openClient = client;
+
+    const snapshot = toSnapshot(state);
+    // Ada as an older save had her: no trait rows at all.
+    await saveVillage(db, {
+      ...snapshot,
+      villagers: snapshot.villagers.map((v) => (v.id === 'ada' ? { ...v, traits: [] } : v)),
+    });
+    const loaded = await loadVillage(db);
+    if (!loaded) throw new Error('nothing saved');
+    const reloaded = fromSnapshot(loaded);
+
+    expect(reloaded.villagers[0]?.traits).toEqual(['tidy', 'grumpy', 'cheerful']);
+    expect(reloaded.villagers[1]?.traits).toEqual(pickTraits(9, 'ada'));
   });
 });

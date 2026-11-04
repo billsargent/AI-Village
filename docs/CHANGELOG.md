@@ -323,3 +323,9 @@
   with numbers, mood with a word, the people they know, what they remember
   and their open promises, with a Chat button. It's read from the sim state
   and kept current by the live updates (#164).
+- Villager traits: 2-3 each, at most one flaw, picked from the village seed
+  when a hire doesn't name them. They're saved in the new `villager_traits`
+  table (older saves get their villagers' traits on load), shown on the
+  villager card, and given to the model as a speaking style that changes tone
+  and length, never facts. Their effects on work and friendships aren't
+  modelled yet (#166).

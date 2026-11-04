@@ -37,6 +37,7 @@ import { createPromisesState, type PromisesState } from './promises.js';
 import { runEveningInteractions, type Relationships } from './relationships.js';
 import { pickHappening, type StorytellerStyle } from './storyteller.js';
 import { chargeUpkeep, upkeepDue } from './upkeep.js';
+import { invalidTraitsReason, pickTraits } from './traits.js';
 import { runStint, type WorkerAssignment } from './work.js';
 import { drawWeather, type WeatherDay } from './weather.js';
 import { createWorkRequestQueue, type WorkRequestQueue } from './work-requests.js';
@@ -93,8 +94,14 @@ export interface StartingStock {
 }
 
 export interface VillageScenario {
-  /** Role defaults to `villager` when omitted. */
-  villagers?: readonly (Omit<WorkerAssignment, 'role'> & { role?: RoleId })[];
+  /**
+   * Role defaults to `villager` when omitted; traits are picked for them
+   * (`pickTraits`) when omitted, and checked when given.
+   */
+  villagers?: readonly (Omit<WorkerAssignment, 'role' | 'traits'> & {
+    role?: RoleId;
+    traits?: readonly string[];
+  })[];
   builtBuildingIds?: readonly string[];
   /** Opening stock (e.g. a starting treasury) funded from the market account. */
   startingStock?: readonly StartingStock[];
@@ -123,10 +130,14 @@ export function createVillage(villageSeed: number, scenario: VillageScenario = {
       reason: 'opening stock',
     });
   }
-  const villagers: WorkerAssignment[] = (scenario.villagers ?? []).map((villager) => ({
-    ...villager,
-    role: villager.role ?? DEFAULT_ROLE,
-  }));
+  const villagers: WorkerAssignment[] = (scenario.villagers ?? []).map((villager) => {
+    const traits = villager.traits ?? pickTraits(villageSeed, villager.villagerId);
+    const invalid = invalidTraitsReason(traits);
+    if (invalid) {
+      throw new Error(`${villager.villagerId}: ${invalid}`);
+    }
+    return { ...villager, role: villager.role ?? DEFAULT_ROLE, traits };
+  });
   validateRoles(villagers);
   return {
     villageSeed,

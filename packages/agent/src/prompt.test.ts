@@ -47,6 +47,20 @@ describe('renderVillagerCard', () => {
       'You are hesper, the Mayor (also a farmer).',
     );
   });
+
+  it('turns traits into a speaking style - tone and length, never the truth', () => {
+    expect(
+      renderVillagerCard({ id: 'tobin', tradeId: 'baker', traits: ['hardworking', 'grumpy'] }),
+    ).toBe(
+      "You are tobin, a baker.\nYou are hardworking (practical), grumpy (short and dry). Let that set your tone and how much you say - never what's true.",
+    );
+  });
+
+  it('skips a trait id the content table no longer has', () => {
+    expect(renderVillagerCard({ id: 'ada', tradeId: 'farmer', traits: ['sparkly'] })).toBe(
+      'You are ada, a farmer.',
+    );
+  });
 });
 
 describe('buildPromptMessages', () => {

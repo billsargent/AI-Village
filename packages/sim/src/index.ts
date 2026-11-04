@@ -21,6 +21,7 @@ export * from './orders.js';
 export * from './board.js';
 export * from './memory.js';
 export * from './promises.js';
+export * from './traits.js';
 export * from './work-requests.js';
 export * from './systems.js';
 export * from './live-clock.js';

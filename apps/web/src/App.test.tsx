@@ -513,6 +513,10 @@ describe('the villager card', () => {
     tradeId: 'baker',
     role: 'villager',
     skillLevel: 2,
+    traits: [
+      { id: 'hardworking', howTheyTalk: 'Practical', isFlaw: false },
+      { id: 'grumpy', howTheyTalk: 'Short and dry', isFlaw: true },
+    ],
     needs: { hunger: 80, energy: 25, social: 60, fun: 70, comfort: 90, purpose: 55 },
     mood: 63,
     relationships: [{ villagerId: 'ada', label: 'close-friend', affinity: 70, familiarity: 90 }],
@@ -541,6 +545,7 @@ describe('the villager card', () => {
     expect(await screen.findByText('Hesper, the baker')).toBeTruthy();
     expect(screen.getByText('Skill 2 of 5 - in the bakery right now')).toBeTruthy();
     expect(screen.getByText('Mood: Content (63)')).toBeTruthy();
+    expect(screen.getByLabelText('Traits').textContent).toBe('Hardworking, Grumpy (a flaw)');
     expect(screen.getByRole('meter', { name: 'Energy' }).getAttribute('aria-valuenow')).toBe('25');
     expect(screen.getByText('Ada - close friend')).toBeTruthy();
     expect(screen.getByText("The owner's favourite food is plum jam")).toBeTruthy();

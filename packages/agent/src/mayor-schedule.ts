@@ -105,7 +105,7 @@ export async function runMayorDuties(
   const result = await runTurn(
     client,
     facts(state, 'owner', 'chat'),
-    { id: mayor.villagerId, tradeId: mayor.tradeId, role: mayor.role },
+    { id: mayor.villagerId, tradeId: mayor.tradeId, role: mayor.role, traits: mayor.traits },
     MAYOR_DAY_REQUEST,
     {
       state,

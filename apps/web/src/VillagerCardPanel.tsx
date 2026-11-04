@@ -99,8 +99,8 @@ const LABEL_WORDS: Record<string, string> = {
 /**
  * Spec section 14's villager card: who they are, where they are, their
  * needs and mood, who they know, what they remember and what they've
- * promised. Traits, likes and the diary aren't shown - the village
- * doesn't have them yet.
+ * promised. Likes and the diary aren't shown - the village doesn't have
+ * them yet.
  */
 export function VillagerCardPanel({
   villagerId,
@@ -133,6 +133,16 @@ export function VillagerCardPanel({
           <p className="text-sm text-ink-soft">
             Skill {card.skillLevel} of 5{where ? ` - ${where} right now` : ''}
           </p>
+          {card.traits.length > 0 && (
+            <p className="text-sm" aria-label="Traits">
+              {card.traits
+                .map(
+                  (trait) =>
+                    `${capitalise(trait.id.replace(/-/g, ' '))}${trait.isFlaw ? ' (a flaw)' : ''}`,
+                )
+                .join(', ')}
+            </p>
+          )}
           {card.mood !== null && (
             <p className="text-sm">
               Mood: {moodWord(card.mood)} ({card.mood})

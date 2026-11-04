@@ -355,6 +355,7 @@ export interface VillagerCard {
   tradeId: string;
   role: string;
   skillLevel: number;
+  traits: readonly { id: string; howTheyTalk: string; isFlaw: boolean }[];
   needs: {
     hunger: number;
     energy: number;

@@ -119,7 +119,7 @@ export async function runVillagerChat(
   const result = await runTurn(
     client,
     facts(state, 'owner', 'chat'),
-    { id: villager.villagerId, tradeId: villager.tradeId, role },
+    { id: villager.villagerId, tradeId: villager.tradeId, role, traits: villager.traits },
     message,
     {
       state,

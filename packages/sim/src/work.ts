@@ -17,6 +17,8 @@ export interface WorkerAssignment {
   moodFactor: number;
   /** Decides which real-work tools they have (spec section 7); defaults to `villager`. */
   role: RoleId;
+  /** 2-3 trait ids from the content table (spec section 7) - see `pickTraits`. */
+  traits: readonly string[];
 }
 
 export interface WorkContext {
@@ -83,7 +85,8 @@ function skillMultiplier(skillLevel: number): number {
  */
 export function runStint(
   ledger: LedgerState,
-  assignment: WorkerAssignment,
+  // Traits don't change a stint's output yet, so a stint doesn't need them.
+  assignment: Omit<WorkerAssignment, 'traits'>,
   context: WorkContext,
 ): StintResult {
   const trade = getTrade(assignment.tradeId);

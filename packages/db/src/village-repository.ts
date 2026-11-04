@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { Database } from './client.js';
 import * as schema from './schema.js';
 
@@ -27,6 +27,8 @@ export interface VillagerRow {
   skillLevel: number;
   hasTool: boolean;
   role: string;
+  /** Saved one row each in `villager_traits`. Empty for a villager saved before traits existed. */
+  traits: readonly string[];
 }
 
 export interface NeedsRow {
@@ -154,7 +156,17 @@ export async function saveVillage(db: Database, snapshot: VillageSnapshot): Prom
 
     await tx.delete(schema.villagers);
     if (snapshot.villagers.length > 0) {
-      await tx.insert(schema.villagers).values([...snapshot.villagers]);
+      await tx
+        .insert(schema.villagers)
+        .values(snapshot.villagers.map(({ traits: _traits, ...villager }) => villager));
+    }
+
+    await tx.delete(schema.villagerTraits);
+    const traitRows = snapshot.villagers.flatMap((villager) =>
+      villager.traits.map((trait) => ({ villagerId: villager.id, trait })),
+    );
+    if (traitRows.length > 0) {
+      await tx.insert(schema.villagerTraits).values(traitRows);
     }
 
     await tx.delete(schema.needs);
@@ -233,6 +245,19 @@ export async function loadVillage(db: Database): Promise<VillageSnapshot | null>
 
   const builtBuildingRows = await db.select().from(schema.builtBuildings).all();
   const villagerRows = await db.select().from(schema.villagers).all();
+  // In the order they were saved: a villager's traits are listed as given.
+  const traitRows = await db
+    .select()
+    .from(schema.villagerTraits)
+    .orderBy(sql`rowid`)
+    .all();
+  const traitsByVillager = new Map<string, string[]>();
+  for (const row of traitRows) {
+    traitsByVillager.set(row.villagerId, [
+      ...(traitsByVillager.get(row.villagerId) ?? []),
+      row.trait,
+    ]);
+  }
   const needsRows = await db.select().from(schema.needs).all();
   const relationshipRows = await db.select().from(schema.relationships).all();
   const ledgerRows = await db.select().from(schema.ledger).all();
@@ -256,7 +281,7 @@ export async function loadVillage(db: Database): Promise<VillageSnapshot | null>
       savedAtRealMs: clockRow.savedAtRealMs,
     },
     builtBuildingIds: builtBuildingRows.map((row) => row.buildingId),
-    villagers: villagerRows,
+    villagers: villagerRows.map((row) => ({ ...row, traits: traitsByVillager.get(row.id) ?? [] })),
     needs: needsRows,
     relationships: relationshipRows,
     ledger: ledgerRows.map((row) => ({
