@@ -47,10 +47,20 @@ describe('interiors', () => {
     expect(INTERIOR_LAYOUTS.shop).toBeDefined();
   });
 
+  it('has a layout for forest-hut', () => {
+    expect(INTERIOR_LAYOUTS['forest-hut']).toBeDefined();
+  });
+
   it('leaves a building needing trade-specific furniture without a layout', () => {
     expect(INTERIOR_LAYOUTS.bakery).toBeUndefined();
     expect(INTERIOR_LAYOUTS.smithy).toBeUndefined();
     expect(INTERIOR_LAYOUTS.chapel).toBeUndefined();
+  });
+
+  it('leaves the dock and the outdoor garden plots without a layout - not enclosed spaces', () => {
+    expect(INTERIOR_LAYOUTS['riverside-jetty']).toBeUndefined();
+    expect(INTERIOR_LAYOUTS.gardens).toBeUndefined();
+    expect(INTERIOR_LAYOUTS['cottage-garden']).toBeUndefined();
   });
 
   it('every placed item is a sane frame at a non-negative tile position', () => {

@@ -177,3 +177,8 @@
   that isn't vendored yet (bakery's oven, smithy's forge, chapel's
   pews, mill's millstones, workshop's workbench) are still left
   without an interior rather than a misrepresented one (#122).
+- An interior for `forest-hut` - the same cosy-dwelling furniture as
+  `cottage` (bed, nightstand, rug, plant), since it's the same simple
+  5x5 footprint class. `riverside-jetty` (a dock, not an enclosed
+  space) and the garden plots stay without an interior - outdoor by
+  definition, not a gap waiting to be filled (#124).
