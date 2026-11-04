@@ -18,10 +18,12 @@ describe('planInteriorDraw', () => {
     expect(planInteriorDraw('smithy')).toBeUndefined();
   });
 
-  it("tags town-hall's bookshelf with its furniture kind", () => {
+  it("tags town-hall's bookshelf and chest with their furniture kinds", () => {
     const plan = planInteriorDraw('town-hall');
     const bookshelf = plan?.furniture.find((item) => item.kind === 'bookshelf');
+    const chest = plan?.furniture.find((item) => item.kind === 'chest');
     expect(bookshelf).toBeDefined();
+    expect(chest).toBeDefined();
   });
 
   it('has a layout for town-hall, inn, school, post-office, shop and forest-hut too', () => {

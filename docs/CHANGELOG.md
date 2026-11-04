@@ -194,3 +194,8 @@
     nothing - a small, honest first slice of section 9's much larger
     furniture-opens-a-dialog vision, not a general dialog framework
     (#126).
+- A second clickable piece in town hall: a chest/trunk sprite picked
+  from the interior sheet is its "treasury chest" (spec section 9),
+  wired to a Treasury panel showing `treasuryCoins` and
+  `treasuryDeltaYesterday` (both already fetched, previously shown
+  only in the top stats line) (#128).
