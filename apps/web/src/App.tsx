@@ -210,7 +210,7 @@ export function App() {
     );
   }
 
-  const whereabouts = whereaboutsNow(data, map);
+  const whereabouts = whereaboutsNow(data);
   const furnished = buildingsWithInteriors(data.builtBuildingIds);
 
   const closeInterior = () => {
@@ -227,6 +227,9 @@ export function App() {
           clickableBuildingIds={new Set(furnished)}
           onBuildingClick={(buildingId) => {
             setInteriorBuildingId(buildingId as BuildingId);
+          }}
+          onVillagerClick={(villagerId) => {
+            setChatWith(villagerId);
           }}
         />
       </div>
@@ -341,14 +344,14 @@ export function App() {
               <h2 className="text-lg">Right now</h2>
               {whereabouts.length > 0 ? (
                 <ul className="list-disc pl-5 text-sm">
-                  {whereabouts.map(({ villager, x, y }) => (
+                  {whereabouts.map(({ villager, where }) => (
                     <li key={villager.id}>
-                      {villager.id} is working at ({x}, {y})
+                      {capitalise(villager.id)} is {where}
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="text-sm text-ink-soft">Nobody's at work on this map.</p>
+                <p className="text-sm text-ink-soft">Nobody lives here yet.</p>
               )}
             </section>
             <section>
@@ -368,7 +371,7 @@ export function App() {
       </div>
 
       <p className="map-text pointer-events-none absolute bottom-3 left-3 z-10 text-sm">
-        Drag or WASD to look around - click a building to go inside
+        Drag or WASD to look around - click a building to go inside, or a villager to chat
       </p>
 
       {interiorBuildingId && (

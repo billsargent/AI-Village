@@ -163,6 +163,11 @@ export function waterOnMap(map: MapId): readonly Rect[] {
   return TERRAIN[map].water;
 }
 
+/** The 3x3 footbridges over the water on `map` (top-left tiles). */
+export function bridgesOnMap(map: MapId): readonly { x: number; y: number }[] {
+  return TERRAIN[map].bridges;
+}
+
 /** Plots on `map` allowed to overlap water, like a jetty reaching into the river. */
 export function waterPlotsOnMap(map: MapId): readonly string[] {
   return TERRAIN[map].waterPlots;

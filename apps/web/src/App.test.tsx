@@ -97,10 +97,10 @@ describe('App', () => {
     expect(screen.getByText('Population: 2')).toBeTruthy();
     expect(screen.getByLabelText('Treasury: 40 coins')).toBeTruthy();
     expect(screen.getByText('The market opened for the day.')).toBeTruthy();
-    expect(screen.getByText('hesper is working at (58, 11)')).toBeTruthy();
+    expect(screen.getByText('Hesper is in the bakery')).toBeTruthy();
   });
 
-  it('switches the "Right now" list to the Riverside map when its button is clicked', async () => {
+  it('says where everyone is, whichever map is showing', async () => {
     const facts: VillageFacts = {
       ...FACTS,
       villagers: [{ id: 'finn', tradeId: 'fisher', role: 'villager' }],
@@ -109,12 +109,9 @@ describe('App', () => {
     vi.stubGlobal('fetch', fetchServing(facts));
     renderApp();
 
-    await screen.findByLabelText(/Moonday, spring day 1/);
-    expect(screen.queryByText(/finn is working at/)).toBeFalsy();
-
+    expect(await screen.findByText('Finn is at the jetty')).toBeTruthy();
     fireEvent.click(screen.getByText('Riverside'));
-
-    expect(await screen.findByText('finn is working at (2, 8)')).toBeTruthy();
+    expect(screen.getByText('Finn is at the jetty')).toBeTruthy();
   });
 
   it('looks inside a furnished building and back out again', async () => {

@@ -1,6 +1,11 @@
 import { MAPS, TILE_PX } from '@ai-village/content';
 import { describe, expect, it } from 'vitest';
-import { builtBuildingsNow, planCanvasDraw, whereaboutsNow } from './village-draw.js';
+import {
+  builtBuildingsNow,
+  planCanvasDraw,
+  villagersOnMap,
+  whereaboutsNow,
+} from './village-draw.js';
 import type { VillageFacts } from './village-api.js';
 
 const BASE_FACTS: VillageFacts = {
@@ -65,35 +70,35 @@ describe('builtBuildingsNow', () => {
 });
 
 describe('whereaboutsNow', () => {
-  it('places the mayor at the town hall during a work stint', () => {
-    const placed = whereaboutsNow(BASE_FACTS);
-    expect(placed).toEqual([
-      { villager: { id: 'hesper', tradeId: 'mayor', role: 'mayor' }, x: 26, y: 2 },
+  it('says where everyone is: the mayor in the town hall, the farmer on the green (no fields yet)', () => {
+    expect(whereaboutsNow(BASE_FACTS).map((w) => [w.villager.id, w.where])).toEqual([
+      ['hesper', 'in the town hall'],
+      ['ada', 'on the green'],
     ]);
   });
 
-  it("doesn't place the farmer - the fields aren't built", () => {
-    const placed = whereaboutsNow(BASE_FACTS);
-    expect(placed.some((p) => p.villager.id === 'ada')).toBe(false);
+  it('has everyone at home at night', () => {
+    const night: VillageFacts = { ...BASE_FACTS, phase: 'night' };
+    expect(whereaboutsNow(night).map((w) => w.where)).toEqual(['at home', 'at home']);
+  });
+});
+
+describe('villagersOnMap', () => {
+  it('draws everyone, even out of sight: the mayor hidden at the town hall door, the farmer on the green', () => {
+    const [hesper, ada] = villagersOnMap(BASE_FACTS);
+    // Town hall: plot (26,2), 9x7 tiles - the door is mid-plot, on the doorstep row.
+    expect(hesper).toMatchObject({ x: 26 + 4, y: 2 + 7, hidden: true });
+    expect(ada?.hidden).toBe(false);
   });
 
-  it("doesn't place a worker whose workplace is on the Riverside or Forest map when asked for the main map", () => {
+  it('shows a fisher at the jetty on the Riverside map, and gone by the signpost on the main map', () => {
     const facts: VillageFacts = {
       ...BASE_FACTS,
       villagers: [{ id: 'finn', tradeId: 'fisher', role: 'villager' }],
       builtBuildingIds: ['riverside-jetty'],
     };
-    expect(whereaboutsNow(facts)).toEqual([]);
-  });
-
-  it('places a worker on the Riverside map when asked for it', () => {
-    const facts: VillageFacts = {
-      ...BASE_FACTS,
-      villagers: [{ id: 'finn', tradeId: 'fisher', role: 'villager' }],
-      builtBuildingIds: ['riverside-jetty'],
-    };
-    const placed = whereaboutsNow(facts, 'riverside');
-    expect(placed.some((p) => p.villager.id === 'finn')).toBe(true);
+    expect(villagersOnMap(facts, 'riverside')[0]?.hidden).toBe(false);
+    expect(villagersOnMap(facts, 'main')[0]).toMatchObject({ x: 67, y: 25, hidden: true });
   });
 });
 
@@ -102,7 +107,6 @@ describe('planCanvasDraw', () => {
     const facts: VillageFacts = { ...BASE_FACTS, villagers: [], builtBuildingIds: [] };
     const plan = planCanvasDraw(facts);
     expect(plan.buildings).toEqual([]);
-    expect(plan.villagers).toEqual([]);
     expect(plan.width).toBe(MAPS.main.widthTiles * TILE_PX);
     expect(plan.height).toBe(MAPS.main.heightTiles * TILE_PX);
     expect(plan.ground.length).toBeGreaterThan(0);
@@ -124,13 +128,6 @@ describe('planCanvasDraw', () => {
     // Town hall: plot (26,2), 9x7 tiles, sprite 5x4 tiles.
     expect(townHall.x).toBe((26 + 2) * TILE_PX);
     expect(townHall.y + townHall.sprite.height).toBe((2 + 7) * TILE_PX);
-  });
-
-  it("stands a worker just outside their building's door", () => {
-    const plan = planCanvasDraw(BASE_FACTS);
-    const mayor = plan.villagers.find((v) => v.villager.id === 'hesper');
-    expect(mayor?.x).toBe((26 + 4) * TILE_PX);
-    expect(mayor?.y).toBe((2 + 7) * TILE_PX);
   });
 
   it('depth-sorts standing sprites by their bottom edge', () => {
