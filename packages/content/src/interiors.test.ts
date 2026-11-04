@@ -40,6 +40,19 @@ describe('interiors', () => {
     expect(INTERIOR_LAYOUTS['town-hall']).toBeDefined();
   });
 
+  it('has a layout for inn, school, post-office and shop', () => {
+    expect(INTERIOR_LAYOUTS.inn).toBeDefined();
+    expect(INTERIOR_LAYOUTS.school).toBeDefined();
+    expect(INTERIOR_LAYOUTS['post-office']).toBeDefined();
+    expect(INTERIOR_LAYOUTS.shop).toBeDefined();
+  });
+
+  it('leaves a building needing trade-specific furniture without a layout', () => {
+    expect(INTERIOR_LAYOUTS.bakery).toBeUndefined();
+    expect(INTERIOR_LAYOUTS.smithy).toBeUndefined();
+    expect(INTERIOR_LAYOUTS.chapel).toBeUndefined();
+  });
+
   it('every placed item is a sane frame at a non-negative tile position', () => {
     for (const [buildingId, items] of Object.entries(INTERIOR_LAYOUTS)) {
       for (const item of items) {
