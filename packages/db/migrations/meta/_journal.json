@@ -78,6 +78,13 @@
       "when": 1793826920755,
       "tag": "0010_flawless_daredevil",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1793835458913,
+      "tag": "0011_brown_silverclaw",
+      "breakpoints": true
     }
   ]
 }

@@ -24,6 +24,7 @@ import { createNeeds, MAX_NEED } from './needs.js';
 import type { OrderStatus } from './orders.js';
 import { decidePromise, makePromise, type PromiseStatus } from './promises.js';
 import { seededRandom, weightedPick } from './random.js';
+import { invalidTraitsReason, pickTraits } from './traits.js';
 import { applyGift } from './relationships.js';
 import type { VillageState } from './systems.js';
 import { queueWorkRequest } from './work-requests.js';
@@ -44,7 +45,7 @@ export type Command =
     }
   | { kind: 'ThankVillager'; villagerId: string }
   | { kind: 'RequestWork'; villagerId: string; description: string }
-  | { kind: 'HireVillager'; tradeId: string; reason: string };
+  | { kind: 'HireVillager'; tradeId: string; reason: string; traits?: readonly string[] };
 
 export type DomainEvent =
   | { kind: 'GiftGiven'; from: string; to: string; item: string; qty: number }
@@ -530,10 +531,9 @@ function applyRequestWork(
 
 /**
  * Spec section 7: "The Mayor proposes a hire with a trade and traits.
- * The app picks a free name, so no name is ever needed to hire." Only
- * the trade is modeled - `WorkerAssignment` has no traits field yet
- * (see `VillagerCard`'s own comment in `packages/agent`), so there's
- * nothing to assign traits to. This also doesn't model "room" (a free
+ * The app picks a free name, so no name is ever needed to hire." The
+ * proposal may name traits (checked against the default rules); if it
+ * doesn't, the newcomer gets their own (`pickTraits`). This doesn't model "room" (a free
  * cottage), walking in along the High Road, or staying at the inn
  * first - none of that is tracked in `VillageState` yet; the newcomer
  * is simply added as a full villager immediately. Whether to call this
@@ -543,11 +543,17 @@ function applyRequestWork(
  */
 function applyHireVillager(
   state: VillageState,
-  command: { tradeId: string; reason: string },
+  command: { tradeId: string; reason: string; traits?: readonly string[] },
 ): CommandResult {
   const trade = getTrade(command.tradeId);
   if (!trade) {
     throw new CommandError(`Unknown trade "${command.tradeId}"`);
+  }
+  if (command.traits) {
+    const invalid = invalidTraitsReason(command.traits);
+    if (invalid) {
+      throw new CommandError(invalid);
+    }
   }
 
   const takenNames = new Set(state.villagers.map((villager) => villager.villagerId));
@@ -574,6 +580,7 @@ function applyHireVillager(
       hasTool: false,
       moodFactor: 1,
       role: DEFAULT_ROLE,
+      traits: command.traits ?? pickTraits(state.villageSeed, villagerId),
     },
   ];
   const villagerNeeds = { ...state.villagerNeeds, [villagerId]: createNeeds() };

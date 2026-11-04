@@ -39,6 +39,16 @@ export const villagers = sqliteTable('villagers', {
   role: text('role').notNull().default('villager'),
 });
 
+/** Spec section 4's `villager_traits`: one row per villager per trait. */
+export const villagerTraits = sqliteTable(
+  'villager_traits',
+  {
+    villagerId: text('villager_id').notNull(),
+    trait: text('trait').notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.villagerId, table.trait] })],
+);
+
 export const needs = sqliteTable('needs', {
   villagerId: text('villager_id').primaryKey(),
   hunger: real('hunger').notNull(),

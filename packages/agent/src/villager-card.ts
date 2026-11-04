@@ -4,11 +4,12 @@
  * diary, promises to the owner." This is the data for it, read straight
  * from the sim state, so it's always the truth.
  *
- * Left out rather than faked: traits and likes (the sim doesn't give
- * villagers any yet) and the diary (nothing writes one). Where they are
+ * Left out rather than faked: likes (the sim doesn't give villagers
+ * any yet) and the diary (nothing writes one). Where they are
  * comes from the map's routine in the browser, not from here.
  */
 
+import { getTrait } from '@ai-village/content';
 import {
   getRelationship,
   labelFor,
@@ -35,6 +36,8 @@ export interface VillagerCardData {
   role: string;
   /** 1-5. */
   skillLevel: number;
+  /** Their traits, with how each makes them talk (spec section 7). */
+  traits: readonly { id: string; howTheyTalk: string; isFlaw: boolean }[];
   /** Each 0-100; null if the sim has no needs on file for them yet. */
   needs: Needs | null;
   /** 0-100, from their needs; null with them. */
@@ -78,6 +81,10 @@ export function villagerCard(state: VillageState, villagerId: string): VillagerC
     tradeId: villager.tradeId,
     role: villager.role,
     skillLevel: villager.skillLevel,
+    traits: villager.traits.flatMap((id) => {
+      const trait = getTrait(id);
+      return trait ? [{ id, howTheyTalk: trait.howTheyTalk, isFlaw: trait.isFlaw }] : [];
+    }),
     needs,
     mood: needs ? Math.round(moodFromNeeds(needs)) : null,
     relationships,

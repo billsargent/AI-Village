@@ -45,7 +45,16 @@ const SAMPLE_SNAPSHOT: VillageSnapshot = {
     savedAtRealMs: 1_700_000_000_000,
   },
   builtBuildingIds: ['town-hall', 'fields', 'fields'],
-  villagers: [{ id: 'ada', tradeId: 'farmer', skillLevel: 2, hasTool: true, role: 'villager' }],
+  villagers: [
+    {
+      id: 'ada',
+      tradeId: 'farmer',
+      skillLevel: 2,
+      hasTool: true,
+      role: 'villager',
+      traits: ['cheerful', 'green-thumbed'],
+    },
+  ],
   needs: [
     { villagerId: 'ada', hunger: 80, energy: 90, social: 70, fun: 60, comfort: 100, purpose: 50 },
   ],

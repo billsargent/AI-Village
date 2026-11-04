@@ -182,9 +182,22 @@ export const PROPOSE_HIRE_TOOL = defineTool({
   roles: ['mayor'],
   purposes: ['mayor-duties'],
   costUsd: 0,
-  args: z.object({ tradeId: z.string(), reason: z.string() }),
-  preview: (args) => `Hire a ${args.tradeId}: ${args.reason}`,
-  run: (args, ctx) => apply(ctx.state, { kind: 'HireVillager', ...args }),
+  // Spec section 7: "The Mayor proposes a hire with a trade and traits." Traits
+  // are optional - the newcomer gets their own if none are named.
+  args: z.object({
+    tradeId: z.string(),
+    reason: z.string(),
+    traits: z.array(z.string()).min(2).max(3).optional(),
+  }),
+  preview: (args) =>
+    `Hire a ${args.tradeId}${args.traits ? ` (${args.traits.join(', ')})` : ''}: ${args.reason}`,
+  run: (args, ctx) =>
+    apply(ctx.state, {
+      kind: 'HireVillager',
+      tradeId: args.tradeId,
+      reason: args.reason,
+      ...(args.traits ? { traits: args.traits } : {}),
+    }),
 });
 
 export const SIM_TOOLS = [

@@ -1,4 +1,5 @@
 import type { VillageSnapshot } from '@ai-village/db';
+import { pickTraits } from '@ai-village/sim';
 import type {
   BoardState,
   ClockState,
@@ -43,6 +44,7 @@ export function toSnapshot(
       skillLevel: villager.skillLevel,
       hasTool: villager.hasTool,
       role: villager.role,
+      traits: villager.traits,
     })),
     needs: Object.entries(state.villagerNeeds).map(([villagerId, needs]) => ({
       villagerId,
@@ -206,6 +208,9 @@ export function fromSnapshot(snapshot: VillageSnapshot): VillageState {
       hasTool: row.hasTool,
       role: row.role as WorkerAssignment['role'],
       moodFactor: 1,
+      // A villager saved before traits existed gets theirs now - the same
+      // ones every time (`pickTraits` is seeded), kept from the next save on.
+      traits: row.traits.length > 0 ? row.traits : pickTraits(snapshot.clock.villageSeed, row.id),
     })),
     villagerNeeds: Object.fromEntries(
       snapshot.needs.map((row) => [

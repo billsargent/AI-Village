@@ -8,7 +8,7 @@
  * calls with other villagers present aren't built yet).
  */
 
-import { getRole, type RoleId } from '@ai-village/content';
+import { getRole, getTrait, type RoleId } from '@ai-village/content';
 import type { ChatMessage } from '@ai-village/integrations';
 import { MINUTES_PER_DAY, type Memory, type VillagerPromise } from '@ai-village/sim';
 import { renderFacts, type FactsSnapshot } from './facts.js';
@@ -59,23 +59,34 @@ export interface VillagerCard {
   tradeId: string;
   /** Defaults to `villager` when omitted. */
   role?: RoleId;
+  /** Trait ids (spec section 7) - rendered as how they talk. */
+  traits?: readonly string[];
 }
 
 const DEFAULT_CARD_ROLE: RoleId = 'villager';
 
 /**
- * Spec section 7's villager card is richer (pronouns, traits as
- * speaking style, likes, bio) than what the sim tracks per villager
- * today - only id, trade and role exist, so that's all this renders. A
- * thin card is still an honest one.
+ * Spec section 7's villager card is richer (pronouns, likes, bio) than
+ * what the sim tracks per villager today - id, trade, role and traits
+ * exist, so that's what this renders. Traits come as a speaking style
+ * (spec section 11: "the villager card: ... traits as speaking style"),
+ * with the charter's rule that they change tone and length, never truth.
  */
 export function renderVillagerCard(card: VillagerCard): string {
   const role = card.role ?? DEFAULT_CARD_ROLE;
-  if (role === DEFAULT_CARD_ROLE) {
-    return `You are ${card.id}, a ${card.tradeId}.`;
-  }
   const roleName = getRole(role)?.title ?? role;
-  return `You are ${card.id}, the ${roleName} (also a ${card.tradeId}).`;
+  const who =
+    role === DEFAULT_CARD_ROLE
+      ? `You are ${card.id}, a ${card.tradeId}.`
+      : `You are ${card.id}, the ${roleName} (also a ${card.tradeId}).`;
+  const styles = (card.traits ?? []).flatMap((id) => {
+    const trait = getTrait(id);
+    return trait ? [`${id.replace(/-/g, ' ')} (${trait.howTheyTalk.toLowerCase()})`] : [];
+  });
+  if (styles.length === 0) {
+    return who;
+  }
+  return `${who}\nYou are ${styles.join(', ')}. Let that set your tone and how much you say - never what's true.`;
 }
 
 /**
