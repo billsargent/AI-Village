@@ -31,16 +31,31 @@ const MAYOR_TOOL_REGISTRY = new ToolRegistry();
 for (const tool of SIM_TOOLS) {
   MAYOR_TOOL_REGISTRY.register(tool);
 }
-const MAYOR_TOOLS: readonly ToolDefinition[] = resolveVillagerTools(
-  MAYOR_TOOL_REGISTRY,
-  'mayor',
-  [],
-)
+// The governance tools, plus the board: spec section 11's Mayor's day ends
+// with "otherwise post a short note on the board".
+const MAYOR_TOOLS: readonly ToolDefinition[] = resolveVillagerTools(MAYOR_TOOL_REGISTRY, 'mayor', [
+  { tool: 'post_on_board', grant: '+' },
+])
   .map((id) => MAYOR_TOOL_REGISTRY.get(id))
   .filter((tool): tool is ToolDefinition => tool !== undefined);
 
-const MAYOR_DAY_REQUEST =
-  "It's the start of a new village day. Attend to your duties: orders, hires, buildings, and anything worth telling the village.";
+/**
+ * Spec section 11's "The Mayor's day", as the morning's request. Nobody
+ * is there to answer a question at this hour, so it says so: a Mayor
+ * that asks "shall I hire a farmer?" instead of proposing one would ask
+ * every morning and never act. Anything that needs the owner's say waits
+ * in their inbox by itself when the tool is called.
+ */
+const MAYOR_DAY_REQUEST = [
+  "It's the start of a new village day, and these are your morning duties as Mayor.",
+  'Nobody will reply to this message, so act through your tools rather than asking questions.',
+  "Anything that needs the owner's say, like a hire, goes to their inbox for approval when you call the tool - so go ahead and propose it.",
+  '1. Accept or decline any new orders.',
+  '2. If a building has no one to work it, or a trade the village needs is missing, propose a hire for that trade.',
+  '3. If a building is needed and the treasury can afford it, propose it.',
+  '4. If two or more matters need the village, call a vote; otherwise post a short note on the board.',
+  'Then finish with one or two sentences on what you did and why.',
+].join('\n');
 
 export interface MayorDayResult {
   state: VillageState;

@@ -1,10 +1,10 @@
 /**
  * Every model and tool call goes through one meter (spec section 16).
- * In-memory for now - a `meter` db table lands once this is wired to a
- * real call path and budgets need to check it before spending.
+ * The live server persists it (the db's `meter` table) and checks
+ * budgets against it before every call.
  */
 
-import { getModelPrice } from '@ai-village/content';
+import { getModelPrice, isPeakTime } from '@ai-village/content';
 
 export interface MeterRecord {
   at: number;
@@ -50,15 +50,19 @@ export function computeCostUsd(
   tokensCached: number,
   tokensOut: number,
   tokensReasoning: number,
+  /** When the call was made - the provider's peak hours cost more (`isPeakTime`). */
+  atMs?: number,
 ): number {
   const price = getModelPrice(model);
   if (!price) {
     return 0;
   }
+  const multiplier = atMs !== undefined && isPeakTime(atMs) ? price.peakMultiplier : 1;
   return (
-    (tokensIn * price.inputPerMillion +
+    ((tokensIn * price.inputPerMillion +
       tokensCached * price.cachedInputPerMillion +
-      (tokensOut + tokensReasoning) * price.outputPerMillion) /
+      (tokensOut + tokensReasoning) * price.outputPerMillion) *
+      multiplier) /
     USD_PER_TOKEN_UNIT
   );
 }

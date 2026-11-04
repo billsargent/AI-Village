@@ -303,3 +303,7 @@
   The meter is persisted so the ceiling holds across restarts, a hire
   waits in the inbox, the village holds still during a turn, and the
   server now listens on 127.0.0.1 only (#156).
+- Talk turns use `deepseek-flash` and switch thinking off explicitly
+  (DeepSeek's default is on). The meter counts cache-hit and reasoning
+  tokens separately, prices follow DeepSeek's doubled peak hours, and the
+  Mayor's morning proposes a hire rather than asking whether to (#158).

@@ -42,12 +42,24 @@ export interface ChatCompletionOptions {
   temperature?: number;
   maxTokens?: number;
   tools?: readonly ToolSchema[];
+  /**
+   * Thinking on or off, sent as DeepSeek's `thinking: { type }`. Always
+   * set it: DeepSeek turns thinking *on* when it's left out, and thinking
+   * ignores temperature (spec section 11).
+   */
+  thinking?: boolean;
 }
 
 export interface ChatCompletionUsage {
+  /** Every input token, cached or not. */
   promptTokens: number;
+  /** Every output token, reasoning included. */
   completionTokens: number;
   totalTokens: number;
+  /** Input tokens served from DeepSeek's prompt cache (billed at the cached rate). */
+  cachedPromptTokens?: number;
+  /** Output tokens spent on reasoning, when thinking is on. */
+  reasoningTokens?: number;
 }
 
 export interface ChatCompletionResult {
@@ -77,6 +89,8 @@ const deepSeekResponseSchema = z.object({
     prompt_tokens: z.number(),
     completion_tokens: z.number(),
     total_tokens: z.number(),
+    prompt_cache_hit_tokens: z.number().optional(),
+    completion_tokens_details: z.object({ reasoning_tokens: z.number().optional() }).optional(),
   }),
 });
 
@@ -139,6 +153,9 @@ export function createDeepSeekClient(options: DeepSeekClientOptions): DeepSeekCl
           temperature: chatOptions.temperature,
           max_tokens: chatOptions.maxTokens,
           tools: chatOptions.tools?.map(toWireTool),
+          ...(chatOptions.thinking !== undefined
+            ? { thinking: { type: chatOptions.thinking ? 'enabled' : 'disabled' } }
+            : {}),
         }),
       });
 
@@ -165,6 +182,8 @@ export function createDeepSeekClient(options: DeepSeekClientOptions): DeepSeekCl
           promptTokens: parsed.usage.prompt_tokens,
           completionTokens: parsed.usage.completion_tokens,
           totalTokens: parsed.usage.total_tokens,
+          cachedPromptTokens: parsed.usage.prompt_cache_hit_tokens ?? 0,
+          reasoningTokens: parsed.usage.completion_tokens_details?.reasoning_tokens ?? 0,
         },
         ...(toolCalls ? { toolCalls } : {}),
       };

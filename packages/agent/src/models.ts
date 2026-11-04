@@ -25,14 +25,14 @@ export interface ModelSettings {
 const PURPOSE_SETTINGS: Partial<Readonly<Record<ModelPurpose, ModelSettings>>> = {
   chat: {
     provider: 'deepseek',
-    model: 'deepseek-chat',
+    model: 'deepseek-flash',
     thinking: false,
     temperature: 0.7,
     maxSteps: 4,
   },
   'mayor-duties': {
     provider: 'deepseek',
-    model: 'deepseek-chat',
+    model: 'deepseek-flash',
     thinking: false,
     temperature: 0.5,
     maxSteps: 6,

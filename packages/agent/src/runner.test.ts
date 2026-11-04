@@ -94,9 +94,44 @@ describe('runChat', () => {
     expect(result.meter[0]).toMatchObject({
       purpose: 'chat',
       villagerId: 'ada',
-      model: 'deepseek-chat',
+      model: 'deepseek-flash',
       tokensIn: 42,
       tokensOut: 7,
+    });
+  });
+
+  it('asks for thinking off, as the purpose says, and meters cached and reasoning tokens apart', async () => {
+    const options: unknown[] = [];
+    const client: ModelClient = {
+      chatCompletion(_messages, callOptions) {
+        options.push(callOptions);
+        return Promise.resolve({
+          text: 'ok',
+          usage: {
+            promptTokens: 100,
+            completionTokens: 30,
+            totalTokens: 130,
+            cachedPromptTokens: 60,
+            reasoningTokens: 10,
+          },
+        });
+      },
+    };
+    const village = createVillage(1);
+
+    const result = await runChat(
+      client,
+      facts(village, 'owner', 'chat'),
+      { id: 'ada', tradeId: 'farmer' },
+      'Hi',
+    );
+
+    expect(options[0]).toMatchObject({ model: 'deepseek-flash', thinking: false });
+    expect(result.meter[0]).toMatchObject({
+      tokensIn: 40,
+      tokensCached: 60,
+      tokensOut: 20,
+      tokensReasoning: 10,
     });
   });
 
@@ -139,7 +174,7 @@ describe('runChat', () => {
         at: Date.now(),
         purpose: 'chat',
         villagerId: 'ada',
-        model: 'deepseek-chat',
+        model: 'deepseek-flash',
         tokensIn: 0,
         tokensCached: 0,
         tokensOut: 0,
@@ -177,7 +212,7 @@ describe('runChat', () => {
         at: 0,
         purpose: 'chat',
         villagerId: 'wren',
-        model: 'deepseek-chat',
+        model: 'deepseek-flash',
         tokensIn: 1,
         tokensCached: 0,
         tokensOut: 1,
@@ -283,7 +318,7 @@ describe('runTurn', () => {
         at: Date.now(),
         purpose: 'chat',
         villagerId: 'ada',
-        model: 'deepseek-chat',
+        model: 'deepseek-flash',
         tokensIn: 0,
         tokensCached: 0,
         tokensOut: 0,

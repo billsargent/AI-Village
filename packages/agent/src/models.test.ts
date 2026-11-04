@@ -6,7 +6,7 @@ describe('modelSettingsFor', () => {
     const settings = modelSettingsFor('chat');
     expect(settings).toEqual({
       provider: 'deepseek',
-      model: 'deepseek-chat',
+      model: 'deepseek-flash',
       thinking: false,
       temperature: 0.7,
       maxSteps: 4,
@@ -17,7 +17,7 @@ describe('modelSettingsFor', () => {
     const settings = modelSettingsFor('mayor-duties');
     expect(settings).toEqual({
       provider: 'deepseek',
-      model: 'deepseek-chat',
+      model: 'deepseek-flash',
       thinking: false,
       temperature: 0.5,
       maxSteps: 6,
