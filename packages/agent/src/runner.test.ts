@@ -6,7 +6,7 @@ import { createApprovalsInbox } from './approvals.js';
 import { defaultBudgetSettings, type BudgetSettings } from './budget.js';
 import { facts } from './facts.js';
 import { runChat, runTurn, type ModelClient, type TurnContext } from './runner.js';
-import { GIFT_TOOL } from './sim-tools.js';
+import { GIFT_TOOL, PROPOSE_HIRE_TOOL } from './sim-tools.js';
 import { defineTool } from './tools.js';
 
 function scriptedClient(reply: string): { client: ModelClient; sentMessages: unknown[] } {
@@ -196,6 +196,25 @@ describe('runChat', () => {
     );
 
     expect(result.meter).toHaveLength(2);
+  });
+
+  it("tags the meter record with a given purpose instead of defaulting to 'chat'", async () => {
+    const { client } = scriptedClient('Hired.');
+    const village = createVillage(1);
+    const snapshot = facts(village, 'owner', 'chat');
+
+    const result = await runChat(
+      client,
+      snapshot,
+      { id: 'hesper', tradeId: 'mayor', role: 'mayor' },
+      'We need a fisher.',
+      [],
+      {},
+      undefined,
+      'mayor-duties',
+    );
+
+    expect(result.meter[0]?.purpose).toBe('mayor-duties');
   });
 });
 
@@ -404,5 +423,98 @@ describe('runTurn', () => {
     expect(result.reply).toBe('');
     expect(result.meter).toHaveLength(4);
     expect(getBalance(result.state.ledger, 'villager:tobin', 'bread')).toBe(4);
+  });
+
+  it("uses the mayor-duties purpose's own maxSteps (6) instead of chat's (4) when given", async () => {
+    const village = villageWithGiftableStock();
+    const { client } = sequentialClient([
+      {
+        text: '',
+        toolCalls: [
+          {
+            id: 'call_1',
+            name: 'gift',
+            arguments: JSON.stringify({ from: 'ada', to: 'tobin', item: 'bread', qty: 1 }),
+          },
+        ],
+      },
+    ]);
+    const ctx: TurnContext = {
+      state: village,
+      tools: [GIFT_TOOL],
+      turn: { tainted: false },
+      sessionApprovedToolIds: new Set(),
+      inbox: createApprovalsInbox(),
+    };
+
+    const result = await runTurn(
+      client,
+      facts(village, 'owner', 'chat'),
+      { id: 'hesper', tradeId: 'mayor', role: 'mayor' },
+      'Keep gifting',
+      ctx,
+      [],
+      {},
+      undefined,
+      'mayor-duties',
+    );
+
+    expect(result.ranOutOfSteps).toBe(true);
+    expect(result.meter).toHaveLength(6);
+  });
+
+  it('requests approval for a real propose_hire call in a mayor-duties turn - the gap #137 documented as not yet reachable', async () => {
+    const village = createVillage(1, {
+      villagers: [
+        {
+          villagerId: 'hesper',
+          tradeId: 'mayor',
+          skillLevel: 1,
+          hasTool: false,
+          moodFactor: 1,
+          role: 'mayor',
+        },
+      ],
+    });
+    const { client } = sequentialClient([
+      {
+        text: '',
+        toolCalls: [
+          {
+            id: 'call_1',
+            name: 'propose_hire',
+            arguments: JSON.stringify({ tradeId: 'fisher', reason: 'nobody fishes yet' }),
+          },
+        ],
+      },
+    ]);
+    const ctx: TurnContext = {
+      state: village,
+      tools: [PROPOSE_HIRE_TOOL],
+      turn: { tainted: false },
+      sessionApprovedToolIds: new Set(),
+      inbox: createApprovalsInbox(),
+    };
+
+    const result = await runTurn(
+      client,
+      facts(village, 'owner', 'chat'),
+      { id: 'hesper', tradeId: 'mayor', role: 'mayor' },
+      'We need a fisher.',
+      ctx,
+      [],
+      {},
+      undefined,
+      'mayor-duties',
+    );
+
+    expect(result.inbox.requests).toHaveLength(1);
+    expect(result.inbox.requests[0]).toMatchObject({
+      toolId: 'propose_hire',
+      args: { tradeId: 'fisher', reason: 'nobody fishes yet' },
+      requestedBy: 'hesper',
+      status: 'pending',
+    });
+    expect(result.state.villagers).toHaveLength(1);
   });
 });
