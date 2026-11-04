@@ -1,9 +1,16 @@
-import { GRASS_TILE, type MapId } from '@ai-village/content';
+import { GRASS_TILE, TILE_PX, walkGrid, type MapId } from '@ai-village/content';
 import { Application, Container, Sprite, TilingSprite } from 'pixi.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { loadFrameTexture } from './load-frame-texture.js';
 import type { VillageFacts } from './village-api.js';
-import { planCanvasDraw } from './village-draw.js';
+import { planCanvasDraw, villagersOnMap } from './village-draw.js';
+import {
+  placeWalker,
+  retargetWalker,
+  stepWalker,
+  walkerPosition,
+  type WalkerState,
+} from './walkers.js';
 
 /** Whole steps only, no smoothing (spec sections 8 and 10: "zooms in whole steps (2x, 3x, 4x)"). */
 const ZOOMS = [2, 3, 4] as const;
@@ -54,6 +61,25 @@ export interface VillageCanvasProps {
   /** Buildings that open something when clicked - only these get a pointer cursor. */
   clickableBuildingIds?: ReadonlySet<string> | undefined;
   onBuildingClick?: ((buildingId: string) => void) | undefined;
+  /** Clicking a villager - the app opens a chat with them. */
+  onVillagerClick?: ((villagerId: string) => void) | undefined;
+}
+
+/** One villager's sprite on the map, and where their walk has got to. */
+interface Walker {
+  sprite: Sprite;
+  state: WalkerState;
+  /** Read by the sprite's hover handler, so it always shows the latest. */
+  where: string;
+}
+
+/** What the pointer is over, for the label under the map. */
+type Hovered = { kind: 'building'; id: string } | { kind: 'villager'; id: string; where: string };
+
+function prefersReducedMotion(): boolean {
+  return typeof window.matchMedia === 'function'
+    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    : false;
 }
 
 /** A live scene for one map: the renderer, and the two layers the village's contents are drawn into. */
@@ -62,6 +88,10 @@ interface Scene {
   flatHost: Container;
   /** Buildings, villagers, trees and rocks, depth-sorted by `zIndex` (their bottom edge). */
   objectsHost: Container;
+  /** The standing things in `objectsHost` that aren't villagers - swapped out together. */
+  statics: Sprite[];
+  /** Every villager on this map, by id; they stay put across rebuilds so they can walk. */
+  walkers: Map<string, Walker>;
   /** Whether the pointer is mid-drag, so a drag ending on a building isn't taken as a click. */
   isDragging: () => boolean;
 }
@@ -72,8 +102,13 @@ interface Scene {
  * doesn't redraw the village.
  */
 function contentsKey(data: VillageFacts, map: MapId): string {
+  return `${map}|${data.builtBuildingIds.join(',')}`;
+}
+
+/** Who's where on the map, as a string: villagers only set off when it changes. */
+function villagersKey(data: VillageFacts, map: MapId): string {
   const villagers = data.villagers.map((v) => `${v.id}:${v.tradeId}`).join(',');
-  return `${map}|${data.builtBuildingIds.join(',')}|${data.phase}|${villagers}`;
+  return `${contentsKey(data, map)}|${data.phase}|${villagers}`;
 }
 
 /**
@@ -93,10 +128,11 @@ export function VillageCanvas({
   map = 'main',
   clickableBuildingIds,
   onBuildingClick,
+  onVillagerClick,
 }: VillageCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const zoomByRef = useRef<((step: number) => void) | null>(null);
-  const [hovered, setHovered] = useState<string | null>(null);
+  const [hovered, setHovered] = useState<Hovered | null>(null);
   const [scene, setScene] = useState<Scene | null>(null);
 
   // Refs, not effect dependencies: a new Set or callback identity on every
@@ -105,6 +141,8 @@ export function VillageCanvas({
   clickableRef.current = clickableBuildingIds;
   const onClickRef = useRef(onBuildingClick);
   onClickRef.current = onBuildingClick;
+  const onVillagerClickRef = useRef(onVillagerClick);
+  onVillagerClickRef.current = onVillagerClick;
   const dataRef = useRef(data);
   dataRef.current = data;
 
@@ -114,6 +152,9 @@ export function VillageCanvas({
   const plan = useMemo(() => planCanvasDraw(dataRef.current, map), [key, map]);
   const planRef = useRef(plan);
   planRef.current = plan;
+  const whoKey = villagersKey(data, map);
+  const placements = useMemo(() => villagersOnMap(dataRef.current, map), [whoKey, map]);
+  const grid = useMemo(() => walkGrid(map, dataRef.current.builtBuildingIds), [key, map]);
 
   // The renderer, camera, input and ground: once per map.
   useEffect(() => {
@@ -280,9 +321,24 @@ export function VillageCanvas({
         return;
       }
       const flatHost = new Container();
-      const objectsHost = new Container();
+      const objectsHost = new Container({ sortableChildren: true });
       world.addChild(grass, groundLayer, flatHost, objectsHost);
-      setScene({ flatHost, objectsHost, isDragging: () => dragged });
+      const walkers = new Map<string, Walker>();
+
+      // Each frame: every villager takes their next step, or fades at a door.
+      const reducedMotion = prefersReducedMotion();
+      app.ticker.add((ticker) => {
+        for (const walker of walkers.values()) {
+          walker.state = stepWalker(walker.state, ticker.deltaMS, reducedMotion);
+          const at = walkerPosition(walker.state, reducedMotion);
+          walker.sprite.position.set(Math.round(at.x * TILE_PX), Math.round(at.y * TILE_PX));
+          walker.sprite.zIndex = walker.sprite.y + walker.sprite.height;
+          walker.sprite.alpha = walker.state.alpha;
+          walker.sprite.visible = walker.state.visible;
+        }
+      });
+
+      setScene({ flatHost, objectsHost, statics: [], walkers, isDragging: () => dragged });
     }
 
     void setup();
@@ -313,7 +369,7 @@ export function VillageCanvas({
         );
       }
 
-      const objects = new Container({ sortableChildren: true });
+      const objects: Sprite[] = [];
       for (const item of plan.standing) {
         const sprite = new Sprite({
           texture: await loadFrameTexture(item.sprite),
@@ -325,13 +381,13 @@ export function VillageCanvas({
           const { buildingId } = item;
           sprite.eventMode = 'static';
           sprite.on('pointerover', () => {
-            setHovered(buildingId);
+            setHovered({ kind: 'building', id: buildingId });
             if (clickableRef.current?.has(buildingId)) {
               sprite.cursor = 'pointer';
             }
           });
           sprite.on('pointerout', () => {
-            setHovered((now) => (now === buildingId ? null : now));
+            setHovered((now) => (now?.id === buildingId ? null : now));
           });
           sprite.on('pointertap', () => {
             if (!current.isDragging() && clickableRef.current?.has(buildingId)) {
@@ -339,22 +395,28 @@ export function VillageCanvas({
             }
           });
         }
-        objects.addChild(sprite);
+        objects.push(sprite);
       }
 
       if (cancelled.current) {
         flat.destroy({ children: true });
-        objects.destroy({ children: true });
+        for (const sprite of objects) {
+          sprite.destroy();
+        }
         return;
       }
-      for (const old of [
-        ...current.flatHost.removeChildren(),
-        ...current.objectsHost.removeChildren(),
-      ]) {
+      for (const old of current.flatHost.removeChildren()) {
         old.destroy({ children: true });
       }
+      for (const old of current.statics) {
+        current.objectsHost.removeChild(old);
+        old.destroy();
+      }
       current.flatHost.addChild(flat);
-      current.objectsHost.addChild(objects);
+      if (objects.length > 0) {
+        current.objectsHost.addChild(...objects);
+      }
+      current.statics = objects;
     }
 
     void populate(scene);
@@ -364,6 +426,73 @@ export function VillageCanvas({
     };
   }, [scene, plan]);
 
+  // Villagers: new ones appear where they belong; everyone else sets off
+  // for their new spot, through doors and along the roads.
+  useEffect(() => {
+    if (!scene) {
+      return;
+    }
+    const cancelled = { current: false };
+    const reducedMotion = prefersReducedMotion();
+
+    async function update(current: Scene) {
+      const seen = new Set<string>();
+      for (const placement of placements) {
+        const id = placement.villager.id;
+        seen.add(id);
+        const target = { x: placement.x, y: placement.y, hidden: placement.hidden };
+        const existing = current.walkers.get(id);
+        if (existing) {
+          existing.state = retargetWalker(existing.state, target, grid, reducedMotion);
+          existing.where = placement.where;
+          continue;
+        }
+        const texture = await loadFrameTexture(placement.sprite);
+        // Set by the cleanup below, across the await.
+        if (cancelled.current) {
+          return;
+        }
+        const state = placeWalker(target);
+        const sprite = new Sprite({
+          texture,
+          x: state.tile.x * TILE_PX,
+          y: state.tile.y * TILE_PX,
+          alpha: state.alpha,
+          visible: state.visible,
+        });
+        sprite.zIndex = sprite.y + sprite.height;
+        sprite.eventMode = 'static';
+        sprite.cursor = 'pointer';
+        const walker: Walker = { sprite, state, where: placement.where };
+        sprite.on('pointerover', () => {
+          setHovered({ kind: 'villager', id, where: walker.where });
+        });
+        sprite.on('pointerout', () => {
+          setHovered((now) => (now?.id === id ? null : now));
+        });
+        sprite.on('pointertap', () => {
+          if (!current.isDragging()) {
+            onVillagerClickRef.current?.(id);
+          }
+        });
+        current.objectsHost.addChild(sprite);
+        current.walkers.set(id, walker);
+      }
+      for (const [id, walker] of current.walkers) {
+        if (!seen.has(id)) {
+          current.objectsHost.removeChild(walker.sprite);
+          walker.sprite.destroy();
+          current.walkers.delete(id);
+        }
+      }
+    }
+
+    void update(scene);
+    return () => {
+      cancelled.current = true;
+    };
+  }, [scene, placements, grid]);
+
   return (
     <div
       ref={containerRef}
@@ -372,8 +501,9 @@ export function VillageCanvas({
     >
       {hovered && (
         <div className="wood-panel pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 px-1 text-lg whitespace-nowrap">
-          {titleCase(hovered)}
-          {clickableBuildingIds?.has(hovered) ? ' - click to go inside' : ''}
+          {hovered.kind === 'building'
+            ? `${titleCase(hovered.id)}${clickableBuildingIds?.has(hovered.id) ? ' - click to go inside' : ''}`
+            : `${titleCase(hovered.id)}, ${hovered.where} - click to chat`}
         </div>
       )}
       <div className="absolute right-3 bottom-3 z-10 flex gap-1">

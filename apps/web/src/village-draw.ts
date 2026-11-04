@@ -6,58 +6,78 @@ import {
   groundTiles,
   MAPS,
   plotKey,
-  positionForWorker,
+  spotSeenFrom,
+  spotsFor,
   spriteForVillager,
   TILE_PX,
   type BuildingId,
   type MapId,
-  type Plot,
   type SpriteFrame,
+  type Spot,
 } from '@ai-village/content';
 import type { VillagerFact, VillageFacts } from './village-api.js';
 
-export interface PlacedVillager {
+/** Where one villager is right now, for the journal: "Ada is on the green". */
+export interface Whereabouts {
   villager: VillagerFact;
-  /** Tile coordinates (spec section 8), not pixels. */
-  x: number;
-  y: number;
+  where: string;
 }
 
-/**
- * Who's currently placed at their built workplace, per `positionForWorker`
- * (spec section 8's plot layout). Each trade's workers fill that
- * workplace's plots in order, so two farmers at a one-field village both
- * show at the same plot - there's no per-villager instance assignment
- * yet, so this never guesses which exact field is "theirs".
- *
- * Only places a villager whose workplace is on `map` - the main,
- * Riverside and Forest maps each have their own separate tile grid (spec
- * section 8), so a worker's plot coordinates only mean something on the
- * one map they're actually on.
- */
-export function whereaboutsNow(data: VillageFacts, map: MapId = 'main'): readonly PlacedVillager[] {
-  return workersAtPlots(data, map).map(({ villager, plot }) => ({
+function spotsNow(data: VillageFacts): readonly Spot[] {
+  return spotsFor(
+    data.villagers.map((villager) => ({ id: villager.id, tradeId: villager.tradeId })),
+    data.builtBuildingIds,
+    data.phase,
+  );
+}
+
+/** Where everyone is (spec section 7's day shape), whichever map they're on. */
+export function whereaboutsNow(data: VillageFacts): readonly Whereabouts[] {
+  const spots = spotsNow(data);
+  return data.villagers.map((villager, index) => ({
     villager,
-    x: plot.x,
-    y: plot.y,
+    where: spots[index]?.where ?? 'about the village',
   }));
 }
 
-function workersAtPlots(data: VillageFacts, map: MapId): { villager: VillagerFact; plot: Plot }[] {
-  const slotByWorksAt = new Map<string, number>();
-  const placed: { villager: VillagerFact; plot: Plot }[] = [];
-  for (const villager of data.villagers) {
-    const first = positionForWorker(villager.tradeId, data.builtBuildingIds, data.phase);
-    if (!first) {
-      continue;
+/** One villager as the map draws them: their sprite, and the tile they're at as seen from this map. */
+export interface VillagerPlacement {
+  villager: VillagerFact;
+  sprite: SpriteFrame;
+  /** Tile coordinates on the map being drawn. */
+  x: number;
+  y: number;
+  /** Out of sight: inside a building (at its door), or off by a signpost to another map. */
+  hidden: boolean;
+  where: string;
+}
+
+/**
+ * Everyone who belongs on `map` right now, or has just left it: someone
+ * at work on the riverside shows on the main map as gone by the
+ * riverside signpost, so they can be seen walking off there.
+ */
+export function villagersOnMap(
+  data: VillageFacts,
+  map: MapId = 'main',
+): readonly VillagerPlacement[] {
+  const spots = spotsNow(data);
+  const placed: VillagerPlacement[] = [];
+  data.villagers.forEach((villager, index) => {
+    const spot = spots[index];
+    const seen = spot ? spotSeenFrom(spot, map) : null;
+    if (!seen) {
+      return;
     }
-    const slot = slotByWorksAt.get(first.buildingId) ?? 0;
-    const plot = positionForWorker(villager.tradeId, data.builtBuildingIds, data.phase, slot);
-    slotByWorksAt.set(first.buildingId, slot + 1);
-    if (plot && plot.map === map) {
-      placed.push({ villager, plot });
-    }
-  }
+    placed.push({
+      villager,
+      sprite: spriteForVillager(villager.id),
+      x: seen.x,
+      y: seen.y,
+      hidden: seen.inside !== undefined,
+      where: seen.where,
+    });
+  });
   return placed;
 }
 
@@ -109,15 +129,9 @@ export interface BuildingDrawnSprite extends DrawnSprite {
   buildingId: string;
 }
 
-export interface VillagerDrawnSprite extends DrawnSprite {
-  villager: VillagerFact;
-}
-
 /** Anything that stands up, drawn in order of its bottom edge so nearer things cover farther ones. */
 export type StandingSprite =
-  | ({ kind: 'building' } & BuildingDrawnSprite)
-  | ({ kind: 'villager' } & VillagerDrawnSprite)
-  | ({ kind: 'decor' } & DrawnSprite);
+  ({ kind: 'building' } & BuildingDrawnSprite) | ({ kind: 'decor' } & DrawnSprite);
 
 export interface CanvasDrawPlan {
   /** The whole map, in pixels at 1x - the camera decides how much of it is on screen. */
@@ -127,10 +141,13 @@ export interface CanvasDrawPlan {
   ground: readonly DrawnSprite[];
   /** Flowers and daisies lying flat on the grass. */
   groundDecor: readonly DrawnSprite[];
-  /** Buildings, villagers, trees, rocks and signposts, already depth-sorted. */
+  /**
+   * Buildings, trees, rocks and signposts, already depth-sorted. Villagers
+   * aren't here: they walk, so the canvas keeps them on their own (see
+   * `villagersOnMap`), sorted in among these by the same bottom-edge rule.
+   */
   standing: readonly StandingSprite[];
   buildings: readonly BuildingDrawnSprite[];
-  villagers: readonly VillagerDrawnSprite[];
 }
 
 function footprintOf(buildingId: string): readonly [number, number] {
@@ -139,9 +156,8 @@ function footprintOf(buildingId: string): readonly [number, number] {
 
 /**
  * Lays out everything on `map`, in map pixels: its ground, its decor, its
- * built buildings and whoever's at work. A building's sprite is smaller
- * than its plot, so it sits at the bottom-centre of the plot, facing the
- * road; whoever works there stands just outside its door.
+ * built buildings. A building's sprite is smaller than its plot, so it
+ * sits at the bottom-centre of the plot, facing the road.
  */
 export function planCanvasDraw(data: VillageFacts, map: MapId = 'main'): CanvasDrawPlan {
   const { widthTiles, heightTiles } = MAPS[map];
@@ -155,21 +171,6 @@ export function planCanvasDraw(data: VillageFacts, map: MapId = 'main'): CanvasD
       sprite: building.sprite,
       x: plotX + Math.floor((fw * TILE_PX - building.sprite.width) / 2 / TILE_PX) * TILE_PX,
       y: plotY + fh * TILE_PX - building.sprite.height,
-    };
-  });
-
-  // Several workers at one plot stand side by side at its door.
-  const standingAtPlot = new Map<string, number>();
-  const villagers = workersAtPlots(data, map).map(({ villager, plot }) => {
-    const key = `${plot.buildingId}:${plot.slot}`;
-    const index = standingAtPlot.get(key) ?? 0;
-    standingAtPlot.set(key, index + 1);
-    const [fw, fh] = footprintOf(plot.buildingId);
-    return {
-      villager,
-      sprite: spriteForVillager(villager.id),
-      x: (plot.x + Math.floor(fw / 2) + index) * TILE_PX,
-      y: (plot.y + fh) * TILE_PX,
     };
   });
 
@@ -191,7 +192,6 @@ export function planCanvasDraw(data: VillageFacts, map: MapId = 'main'): CanvasD
 
   const standing: StandingSprite[] = [
     ...buildings.map((b) => ({ kind: 'building' as const, ...b })),
-    ...villagers.map((v) => ({ kind: 'villager' as const, ...v })),
     ...decor
       .filter((d) => d.layer === 'object')
       .map((d) => ({ kind: 'decor' as const, ...toPx(d) })),
@@ -204,6 +204,5 @@ export function planCanvasDraw(data: VillageFacts, map: MapId = 'main'): CanvasD
     groundDecor: decor.filter((d) => d.layer === 'ground').map(toPx),
     standing,
     buildings,
-    villagers,
   };
 }

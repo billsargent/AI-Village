@@ -312,3 +312,9 @@
   memories and promises. It's metered, needs only a key, and is never stopped by
   the monthly ceiling. Tool schemas are now sent as JSON Schema draft 7,
   since DeepSeek rejected the OpenAPI form of `positive()` numbers (#160).
+- Villagers on the map all day. Each has a daily routine: home at dawn and
+  night, work in the stints, the inn or the green at lunch and in the evening.
+  They walk between places along the roads (A* on a walk grid) and fade out
+  at a door going in, or in at the door coming out. Clicking a villager opens
+  a chat, and the journal says where everyone is. Reduced motion moves them
+  tile by tile without fades (#162).
