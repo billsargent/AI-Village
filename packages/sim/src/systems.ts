@@ -30,7 +30,7 @@ import {
 import { createPromisesState, type PromisesState } from './promises.js';
 import { runEveningInteractions, type Relationships } from './relationships.js';
 import { pickHappening, type StorytellerStyle } from './storyteller.js';
-import { chargeUpkeep } from './upkeep.js';
+import { chargeUpkeep, upkeepDue } from './upkeep.js';
 import { runStint, type WorkerAssignment } from './work.js';
 import { drawWeather, type WeatherDay } from './weather.js';
 import { createWorkRequestQueue, type WorkRequestQueue } from './work-requests.js';
@@ -194,10 +194,30 @@ export interface DayReport {
   happening: HappeningCard | null;
 }
 
-/** Runs one village day's systems in the fixed order and returns the next state. */
+/**
+ * Runs one village day's systems in the fixed order and returns the next
+ * state, one whole day later - the headless runner's step (spec section 3).
+ */
 export function runVillageDay(state: VillageState): { state: VillageState; report: DayReport } {
-  // clock: the headless runner steps by whole days, so nothing to do here
-  // beyond reading the date that weather needs.
+  const settled = settleDay(state);
+  return {
+    state: {
+      ...settled.state,
+      clock: { ...settled.state.clock, minute: state.clock.minute + MINUTES_PER_DAY },
+    },
+    report: settled.report,
+  };
+}
+
+/**
+ * Runs the systems for the village day the clock is currently in,
+ * without moving the clock - so a live clock can advance minute by minute
+ * and settle each day as it reaches it. Every ledger and chronicle entry
+ * it makes is stamped with the clock's current minute.
+ */
+export function settleDay(state: VillageState): { state: VillageState; report: DayReport } {
+  // clock: whoever calls this moves the clock; here it's only read, for
+  // the date that weather and the rest need.
   const date = calendarDateFromMinute(state.clock.minute);
 
   // weather
@@ -211,6 +231,7 @@ export function runVillageDay(state: VillageState): { state: VillageState; repor
   let chronicle = state.chronicle;
   const villagerNeeds: Record<string, Needs> = { ...state.villagerNeeds };
   const waiting: string[] = [];
+  const unpaid = new Set<string>();
 
   for (const villager of state.villagers) {
     const needsBeforeWork = villagerNeeds[villager.villagerId] ?? createNeeds();
@@ -246,6 +267,9 @@ export function runVillageDay(state: VillageState): { state: VillageState; repor
       } else {
         workedAStint = true;
       }
+      if (stint.unpaid) {
+        unpaid.add(villager.villagerId);
+      }
     }
 
     // needs: eat from stores, or get a relief basket if there's neither food nor coins
@@ -269,8 +293,33 @@ export function runVillageDay(state: VillageState): { state: VillageState; repor
     villagerNeeds[villager.villagerId] = applyPurposeForDay(decayed, workedAStint);
   }
 
-  // economy: nightly upkeep
+  if (unpaid.size > 0) {
+    chronicle = appendChronicle(chronicle, {
+      minute: state.clock.minute,
+      kind: 'unpaid-wages',
+      text: `The treasury ran dry: ${[...unpaid].join(', ')} worked without pay.`,
+      actors: [...unpaid],
+      importance: 3,
+      public: true,
+    });
+  }
+
+  // economy: nightly upkeep, as much as the treasury can cover
+  const treasuryBeforeUpkeep = getBalance(ledger, 'treasury', 'coins');
   ledger = chargeUpkeep(ledger, state.clock.minute, state.builtBuildingIds);
+  const upkeepShort =
+    upkeepDue(state.builtBuildingIds) -
+    (treasuryBeforeUpkeep - getBalance(ledger, 'treasury', 'coins'));
+  if (upkeepShort > 0) {
+    chronicle = appendChronicle(chronicle, {
+      minute: state.clock.minute,
+      kind: 'unpaid-upkeep',
+      text: `The treasury couldn't cover the upkeep: ${upkeepShort} coin(s) short.`,
+      actors: [],
+      importance: 2,
+      public: true,
+    });
+  }
 
   // economy: the downriver town may post a new order, and any accepted order with enough stock is delivered
   const ordersBeforePosting = state.orders.orders;
@@ -352,7 +401,6 @@ export function runVillageDay(state: VillageState): { state: VillageState; repor
 
   const nextState: VillageState = {
     ...state,
-    clock: { ...state.clock, minute: state.clock.minute + MINUTES_PER_DAY },
     ledger,
     villagerNeeds: effect.villagerNeeds,
     weatherHistory: [...state.weatherHistory, weather],

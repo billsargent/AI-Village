@@ -23,4 +23,5 @@ export * from './memory.js';
 export * from './promises.js';
 export * from './work-requests.js';
 export * from './systems.js';
+export * from './live-clock.js';
 export * from './commands.js';
