@@ -10,7 +10,7 @@ import {
 import { checkBudget, type BudgetCheck, type BudgetSettings } from './budget.js';
 import type { FactsSnapshot } from './facts.js';
 import { appendMeterRecord, computeCostUsd, type Meter, type MeterRecord } from './meter.js';
-import { modelSettingsFor } from './models.js';
+import { modelSettingsFor, type ModelPurpose } from './models.js';
 import { buildPromptMessages, type PromptOptions, type VillagerCard } from './prompt.js';
 import type { ToolDefinition, ToolRunContext } from './tools.js';
 
@@ -49,11 +49,13 @@ export interface RunChatResult {
 }
 
 /**
- * Runs one chat turn: the full prompt layout (spec section 11) ending
- * with the request, sent to the chat purpose's model. Records a meter
- * entry with its real $ cost. When `budgetSettings` is given and the
- * call would exceed it, the model is never called - see `checkBudget`
- * for what's actually enforced today.
+ * Runs one turn without tools: the full prompt layout (spec section 11)
+ * ending with the request, sent to `purpose`'s model (`chat` unless
+ * given - every call site before this parameter existed was a chat
+ * turn, so that's the backward-compatible default, not a guess).
+ * Records a meter entry with its real $ cost. When `budgetSettings` is
+ * given and the call would exceed it, the model is never called - see
+ * `checkBudget` for what's actually enforced today.
  */
 export async function runChat(
   client: ModelClient,
@@ -63,11 +65,12 @@ export async function runChat(
   meter: Meter = [],
   promptExtras: PromptExtras = {},
   budgetSettings?: BudgetSettings,
+  purpose: ModelPurpose = 'chat',
 ): Promise<RunChatResult> {
-  const settings = modelSettingsFor('chat');
+  const settings = modelSettingsFor(purpose);
 
   if (budgetSettings) {
-    const budget = checkBudget(meter, budgetSettings, 'chat', villager.id, Date.now());
+    const budget = checkBudget(meter, budgetSettings, purpose, villager.id, Date.now());
     if (!budget.ok) {
       return { reply: '', meter, budgetExceeded: budget.reason };
     }
@@ -84,7 +87,7 @@ export async function runChat(
 
   const record: MeterRecord = {
     at: startedAt,
-    purpose: 'chat',
+    purpose,
     villagerId: villager.id,
     model: settings.model,
     tokensIn: result.usage.promptTokens,
@@ -140,12 +143,14 @@ export interface RunTurnResult {
 }
 
 /**
- * Runs one chat turn with tools (spec section 11: the `chat` purpose gets
- * game actions, up to 4 steps). Each step calls the model with the
- * villager's tools; a plain reply ends the turn, a tool call runs
- * through the registry's `run()` (which calls the sim's `apply()`) and
- * feeds the result back as a `tool` message, and the loop repeats until
- * a reply comes back or `maxSteps` runs out.
+ * Runs one turn with tools (spec section 11: a purpose's tools, up to
+ * its own `maxSteps` - `chat` by default, the backward-compatible
+ * choice for every call site before this parameter existed, not a
+ * guess). Each step calls the model with `ctx.tools`; a plain reply
+ * ends the turn, a tool call runs through the registry's `run()`
+ * (which calls the sim's `apply()`) and feeds the result back as a
+ * `tool` message, and the loop repeats until a reply comes back or
+ * `maxSteps` runs out.
  */
 export async function runTurn(
   client: ModelClient,
@@ -156,8 +161,9 @@ export async function runTurn(
   meter: Meter = [],
   promptExtras: PromptExtras = {},
   budgetSettings?: BudgetSettings,
+  purpose: ModelPurpose = 'chat',
 ): Promise<RunTurnResult> {
-  const settings = modelSettingsFor('chat');
+  const settings = modelSettingsFor(purpose);
   const toolSchemas = ctx.tools.map(toToolSchema);
 
   const messages = buildPromptMessages({ villager, facts, request, ...promptExtras });
@@ -169,7 +175,7 @@ export async function runTurn(
 
   for (let step = 0; step < settings.maxSteps; step++) {
     if (budgetSettings) {
-      const budget = checkBudget(currentMeter, budgetSettings, 'chat', villager.id, Date.now());
+      const budget = checkBudget(currentMeter, budgetSettings, purpose, villager.id, Date.now());
       if (!budget.ok) {
         return {
           reply: '',
@@ -192,7 +198,7 @@ export async function runTurn(
 
     currentMeter = appendMeterRecord(currentMeter, {
       at: startedAt,
-      purpose: 'chat',
+      purpose,
       villagerId: villager.id,
       model: settings.model,
       tokensIn: result.usage.promptTokens,

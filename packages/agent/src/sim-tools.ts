@@ -18,10 +18,12 @@
  * `risk: 'medium'`/`approval: 'each-time'`, gated by `needsApproval`
  * like every other medium/high tool - the only thing new is that this
  * is the first `SIM_TOOLS` entry to actually use that gate. Its
- * `purposes: ['mayor-duties']` matches spec section 11's table
- * honestly, but nothing calls `runTurn` with that purpose yet (the
- * runner is still chat-only) - defined and tested, not yet reachable
- * from a real turn, the same gap `modelSettingsFor` already documents.
+ * `purposes: ['mayor-duties']` matches spec section 11's table, and
+ * `runChat`/`runTurn` can run that purpose too (`purpose`, both default
+ * `'chat'` for every call site that predates it) - still nothing in
+ * this app actually calls `runTurn` for a Mayor's daily duties turn
+ * yet (there's no scheduler for that), but the plumbing to is no
+ * longer missing, unlike when this comment first called it out.
  */
 
 import { apply } from '@ai-village/sim';

@@ -231,3 +231,12 @@
   and documented as such: traits, a "room"/free-cottage check, and the
   newcomer walking in or staying at the inn first - none of that state
   exists in the sim yet (#136).
+- `runChat`/`runTurn` take an optional `purpose` (defaulting to `chat`
+  for every call site that predates it), using it for the model
+  settings, the budget check and the meter record instead of a
+  hardcoded `'chat'` literal. Closes the gap #136 left open: a real
+  `runTurn` call can now run `PROPOSE_HIRE_TOOL` end to end under the
+  `mayor-duties` purpose and land a pending approval request. Nothing
+  yet calls `runTurn` with `mayor-duties` on a schedule - the Mayor's
+  daily duties (spec section 11) still need a scheduler, separate work
+  (#138).
