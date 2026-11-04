@@ -11,6 +11,7 @@ import type {
   VillageState,
   WeatherDay,
   WorkerAssignment,
+  WorkRequestQueue,
 } from '@ai-village/sim';
 
 /**
@@ -100,6 +101,12 @@ export function toSnapshot(state: VillageState): VillageSnapshot {
       dueMinute: promise.dueMinute,
       status: promise.status,
     })),
+    workRequests: state.workRequests.requests.map((request) => ({
+      id: request.id,
+      villagerId: request.villagerId,
+      description: request.description,
+      requestedMinute: request.requestedMinute,
+    })),
   };
 }
 
@@ -178,6 +185,11 @@ export function fromSnapshot(snapshot: VillageSnapshot): VillageState {
     nextId: snapshot.promises.reduce((max, promise) => Math.max(max, promise.id + 1), 1),
   };
 
+  const workRequests: WorkRequestQueue = {
+    requests: snapshot.workRequests,
+    nextId: snapshot.workRequests.reduce((max, request) => Math.max(max, request.id + 1), 1),
+  };
+
   return {
     villageSeed: snapshot.clock.villageSeed,
     clock,
@@ -220,5 +232,6 @@ export function fromSnapshot(snapshot: VillageSnapshot): VillageState {
     board,
     memory,
     promises,
+    workRequests,
   };
 }

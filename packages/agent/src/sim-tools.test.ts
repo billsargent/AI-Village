@@ -9,6 +9,7 @@ import {
   PROMISE_TOOL,
   PROPOSE_BUILDING_TOOL,
   REMEMBER_TOOL,
+  REQUEST_WORK_TOOL,
   SIM_TOOLS,
 } from './sim-tools.js';
 import { resolveVillagerTools, ToolRegistry } from './tools.js';
@@ -236,6 +237,41 @@ describe('PROMISE_TOOL', () => {
   });
 });
 
+describe('REQUEST_WORK_TOOL', () => {
+  it('runs the RequestWork command against the sim state', () => {
+    const village = createVillage(1, {
+      villagers: [
+        { villagerId: 'ada', tradeId: 'farmer', skillLevel: 1, hasTool: false, moodFactor: 1 },
+      ],
+    });
+    const args = REQUEST_WORK_TOOL.args.parse({
+      villagerId: 'ada',
+      description: 'Weed the north field',
+    });
+    const result = REQUEST_WORK_TOOL.run?.(args, { state: village }) as {
+      state: typeof village;
+      events: unknown[];
+    };
+
+    expect(result.state.workRequests.requests[0]?.description).toBe('Weed the north field');
+    expect(result.events).toEqual([{ kind: 'WorkRequested', requestId: 1 }]);
+  });
+
+  it('is a risk-none game action granted to the Villager role', () => {
+    expect(REQUEST_WORK_TOOL.kind).toBe('game');
+    expect(REQUEST_WORK_TOOL.risk).toBe('none');
+    const registry = new ToolRegistry();
+    registry.register(REQUEST_WORK_TOOL);
+    expect(resolveVillagerTools(registry, 'villager', [])).toEqual(['request_work']);
+  });
+
+  it('previews the queued work in plain language', () => {
+    expect(REQUEST_WORK_TOOL.preview?.({ villagerId: 'ada', description: 'Weed the field' })).toBe(
+      'Queue work: "Weed the field"',
+    );
+  });
+});
+
 describe('SIM_TOOLS', () => {
   it('contains every sim tool with unique ids', () => {
     expect(new Set(SIM_TOOLS.map((tool) => tool.id))).toEqual(
@@ -248,6 +284,7 @@ describe('SIM_TOOLS', () => {
         'call_vote',
         'remember',
         'promise',
+        'request_work',
       ]),
     );
   });

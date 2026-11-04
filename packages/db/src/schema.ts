@@ -118,6 +118,13 @@ export const promises = sqliteTable('promises', {
   status: text('status').notNull(),
 });
 
+export const workRequests = sqliteTable('work_requests', {
+  id: integer('id').primaryKey(),
+  villagerId: text('villager_id').notNull(),
+  description: text('description').notNull(),
+  requestedMinute: real('requested_minute').notNull(),
+});
+
 export const chronicle = sqliteTable('chronicle', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   minute: real('minute').notNull(),
