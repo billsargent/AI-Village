@@ -1,5 +1,6 @@
 import { createVillage, getBalance, type Order, type VillageState } from '@ai-village/sim';
 import { describe, expect, it } from 'vitest';
+import { needsApproval } from './approvals.js';
 import {
   ACCEPT_ORDER_TOOL,
   CALL_VOTE_TOOL,
@@ -8,6 +9,7 @@ import {
   POST_ON_BOARD_TOOL,
   PROMISE_TOOL,
   PROPOSE_BUILDING_TOOL,
+  PROPOSE_HIRE_TOOL,
   REMEMBER_TOOL,
   REQUEST_WORK_TOOL,
   SIM_TOOLS,
@@ -272,6 +274,49 @@ describe('REQUEST_WORK_TOOL', () => {
   });
 });
 
+describe('PROPOSE_HIRE_TOOL', () => {
+  it('runs the HireVillager command against the sim state', () => {
+    const village = createVillage(1, {
+      villagers: [
+        { villagerId: 'ada', tradeId: 'farmer', skillLevel: 1, hasTool: false, moodFactor: 1 },
+      ],
+    });
+    const args = PROPOSE_HIRE_TOOL.args.parse({
+      tradeId: 'miller',
+      reason: 'the mill has nobody to run it',
+    });
+    const result = PROPOSE_HIRE_TOOL.run?.(args, { state: village }) as {
+      state: typeof village;
+      events: { kind: string; villagerId: string; tradeId: string }[];
+    };
+
+    expect(result.state.villagers).toHaveLength(2);
+    const hired = result.state.villagers.find((v) => v.tradeId === 'miller');
+    expect(result.events).toEqual([
+      { kind: 'VillagerHired', villagerId: hired?.villagerId, tradeId: 'miller' },
+    ]);
+  });
+
+  it('is a medium-risk game action needing approval each time, granted to the Mayor role - spec section 15\'s "the owner decides"', () => {
+    expect(PROPOSE_HIRE_TOOL.kind).toBe('game');
+    expect(PROPOSE_HIRE_TOOL.risk).toBe('medium');
+    expect(PROPOSE_HIRE_TOOL.approval).toBe('each-time');
+    const registry = new ToolRegistry();
+    registry.register(PROPOSE_HIRE_TOOL);
+    expect(resolveVillagerTools(registry, 'mayor', [])).toEqual(['propose_hire']);
+  });
+
+  it('previews the proposed hire in plain language', () => {
+    expect(PROPOSE_HIRE_TOOL.preview?.({ tradeId: 'miller', reason: 'no miller yet' })).toBe(
+      'Hire a miller: no miller yet',
+    );
+  });
+
+  it("actually needs the owner's approval, unlike every risk-none tool above", () => {
+    expect(needsApproval(PROPOSE_HIRE_TOOL, { tainted: false }, new Set())).toBe(true);
+  });
+});
+
 describe('SIM_TOOLS', () => {
   it('contains every sim tool with unique ids', () => {
     expect(new Set(SIM_TOOLS.map((tool) => tool.id))).toEqual(
@@ -285,6 +330,7 @@ describe('SIM_TOOLS', () => {
         'remember',
         'promise',
         'request_work',
+        'propose_hire',
       ]),
     );
   });

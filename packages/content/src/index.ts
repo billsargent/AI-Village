@@ -1,6 +1,6 @@
 // Goods, trades, buildings, traits and happenings live here as data files
 // with zod schemas (spec section 5-7). This package depends on nothing
-// else in the workspace; festivals, names, playbooks and prices follow.
+// else in the workspace; playbooks follow.
 
 export const CONTENT_PACKAGE_VERSION = '0.0.0';
 
@@ -14,3 +14,4 @@ export * from './layout.js';
 export * from './sprites.js';
 export * from './interiors.js';
 export * from './happenings.js';
+export * from './names.js';

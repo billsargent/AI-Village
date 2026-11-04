@@ -12,6 +12,16 @@
  * rules can require approval for it, but there's no settings/permission
  * system yet to drive that, so it stays `risk: 'none'`/`approval:
  * 'never'` like every other tool here until one exists - not faked.
+ *
+ * `propose_hire` is the first tool here that isn't risk none: spec
+ * section 15's table says plainly "Hire ... The owner decides", so it's
+ * `risk: 'medium'`/`approval: 'each-time'`, gated by `needsApproval`
+ * like every other medium/high tool - the only thing new is that this
+ * is the first `SIM_TOOLS` entry to actually use that gate. Its
+ * `purposes: ['mayor-duties']` matches spec section 11's table
+ * honestly, but nothing calls `runTurn` with that purpose yet (the
+ * runner is still chat-only) - defined and tested, not yet reachable
+ * from a real turn, the same gap `modelSettingsFor` already documents.
  */
 
 import { apply } from '@ai-village/sim';
@@ -161,6 +171,20 @@ export const REQUEST_WORK_TOOL = defineTool({
   run: (args, ctx) => apply(ctx.state, { kind: 'RequestWork', ...args }),
 });
 
+export const PROPOSE_HIRE_TOOL = defineTool({
+  id: 'propose_hire',
+  title: 'Propose a hire',
+  kind: 'game',
+  risk: 'medium',
+  approval: 'each-time',
+  roles: ['mayor'],
+  purposes: ['mayor-duties'],
+  costUsd: 0,
+  args: z.object({ tradeId: z.string(), reason: z.string() }),
+  preview: (args) => `Hire a ${args.tradeId}: ${args.reason}`,
+  run: (args, ctx) => apply(ctx.state, { kind: 'HireVillager', ...args }),
+});
+
 export const SIM_TOOLS = [
   GIFT_TOOL,
   PROPOSE_BUILDING_TOOL,
@@ -171,4 +195,5 @@ export const SIM_TOOLS = [
   REMEMBER_TOOL,
   PROMISE_TOOL,
   REQUEST_WORK_TOOL,
+  PROPOSE_HIRE_TOOL,
 ] as const;
