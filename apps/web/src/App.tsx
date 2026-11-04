@@ -13,12 +13,17 @@ const MAP_LABELS: Record<MapId, string> = {
 };
 
 /**
- * Town hall's bookshelf is its "archive cabinet" (spec section 9) -
- * the one piece of furniture wired to a real feature so far. Every
- * other piece, in every building, stays inert rather than offering a
- * click that does nothing.
+ * Town hall's bookshelf is its "archive cabinet" and its chest is the
+ * "treasury chest" (spec section 9) - the furniture wired to a real
+ * feature so far. Every other piece, in every building, stays inert
+ * rather than offering a click that does nothing.
  */
-const TOWN_HALL_INTERACTIVE_KINDS = new Set<FurnitureKind>(['bookshelf']);
+const TOWN_HALL_INTERACTIVE_KINDS = new Set<FurnitureKind>(['bookshelf', 'chest']);
+
+/** "+3" / "-2" / "0", for yesterday's treasury change. */
+function signed(n: number): string {
+  return n > 0 ? `+${n}` : `${n}`;
+}
 
 /** "town-hall" -> "Town Hall", for a building id with no dedicated label yet. */
 function titleCase(buildingId: string): string {
@@ -33,6 +38,7 @@ export function App() {
   const [map, setMap] = useState<MapId>('main');
   const [interiorBuildingId, setInteriorBuildingId] = useState<BuildingId | null>(null);
   const [showArchive, setShowArchive] = useState(false);
+  const [showTreasury, setShowTreasury] = useState(false);
 
   if (isPending) {
     return <p className="p-4 text-slate-600">Loading the village...</p>;
@@ -65,6 +71,7 @@ export function App() {
               onClick={() => {
                 setInteriorBuildingId(null);
                 setShowArchive(false);
+                setShowTreasury(false);
               }}
               className="rounded bg-slate-200 px-3 py-1 text-slate-900"
             >
@@ -72,7 +79,9 @@ export function App() {
             </button>
           </div>
           {interiorBuildingId === 'town-hall' && (
-            <p className="mt-2 text-sm text-slate-600">Click the bookshelf for the archive.</p>
+            <p className="mt-2 text-sm text-slate-600">
+              Click the bookshelf for the archive, or the chest for the treasury.
+            </p>
           )}
           <div className="mt-2">
             <InteriorCanvas
@@ -83,6 +92,8 @@ export function App() {
               onFurnitureClick={(kind) => {
                 if (kind === 'bookshelf') {
                   setShowArchive(true);
+                } else if (kind === 'chest') {
+                  setShowTreasury(true);
                 }
               }}
             />
@@ -110,6 +121,26 @@ export function App() {
               ) : (
                 <p className="mt-2 text-slate-600">Nothing in the chronicle yet.</p>
               )}
+            </div>
+          )}
+          {showTreasury && (
+            <div className="mt-2 max-w-md rounded border border-slate-300 bg-white p-3">
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold">Treasury</h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowTreasury(false);
+                  }}
+                  className="rounded bg-slate-200 px-2 py-0.5 text-sm text-slate-900"
+                >
+                  Close
+                </button>
+              </div>
+              <p className="mt-2">{data.treasuryCoins} coins</p>
+              <p className="text-sm text-slate-600">
+                {signed(data.treasuryDeltaYesterday)} coins since yesterday
+              </p>
             </div>
           )}
         </>

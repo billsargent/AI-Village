@@ -112,7 +112,7 @@ describe('App', () => {
     expect(await screen.findByTestId('village-canvas')).toBeTruthy();
   });
 
-  it("shows a hint to click town-hall's bookshelf, but no archive panel yet", async () => {
+  it("shows a hint to click town-hall's bookshelf and chest, but no panels yet", async () => {
     const facts: VillageFacts = { ...FACTS, builtBuildingIds: ['town-hall'] };
     vi.stubGlobal(
       'fetch',
@@ -123,8 +123,13 @@ describe('App', () => {
     await screen.findByText(/Moonday, spring day 1/);
     fireEvent.click(screen.getByText('Look inside Town Hall'));
 
-    expect(await screen.findByText('Click the bookshelf for the archive.')).toBeTruthy();
+    expect(
+      await screen.findByText(
+        'Click the bookshelf for the archive, or the chest for the treasury.',
+      ),
+    ).toBeTruthy();
     expect(screen.queryByText('Archive')).toBeFalsy();
+    expect(screen.queryByText('Treasury')).toBeFalsy();
   });
 
   it("doesn't show the bookshelf hint for a building without one", async () => {
