@@ -105,6 +105,67 @@ export function useSetClockSpeed() {
   });
 }
 
+/** One tool call waiting on the owner, or decided by them (spec section 12). */
+export interface ApprovalRequest {
+  id: number;
+  toolId: string;
+  args: unknown;
+  risk: string;
+  preview: string | null;
+  requestedBy: string;
+  status: 'pending' | 'approved' | 'declined';
+  createdAt: number;
+}
+
+export interface ApprovalsList {
+  pending: readonly ApprovalRequest[];
+  decided: readonly ApprovalRequest[];
+}
+
+async function fetchApprovals(): Promise<ApprovalsList> {
+  const response = await fetch('/api/approvals');
+  if (!response.ok) {
+    throw new Error(`GET /api/approvals failed: ${response.status}`);
+  }
+  return (await response.json()) as ApprovalsList;
+}
+
+export function useApprovals() {
+  return useQuery({ queryKey: ['approvals'], queryFn: fetchApprovals });
+}
+
+/** How many approvals are waiting, for the bell - kept current by the live updates. */
+export function usePendingApprovalCount(): number {
+  const { data } = useApprovals();
+  return data?.pending.length ?? 0;
+}
+
+async function decideApproval(input: {
+  id: number;
+  decision: 'approved' | 'declined';
+}): Promise<ApprovalRequest> {
+  const response = await fetch(`/api/approvals/${input.id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ decision: input.decision }),
+  });
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error ?? `POST /api/approvals failed: ${response.status}`);
+  }
+  return (await response.json()) as ApprovalRequest;
+}
+
+export function useDecideApproval() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: decideApproval,
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['approvals'] });
+    },
+  });
+}
+
 /**
  * Keeps the village and clock queries current from the server's live
  * updates (spec section 2's server-sent events) - a fresh copy every
@@ -123,9 +184,15 @@ export function useLiveUpdates() {
       const payload = JSON.parse((event as MessageEvent<string>).data) as {
         facts: VillageFacts;
         clock: ClockStatus;
+        approvals: { pending: number };
       };
       queryClient.setQueryData(['village'], payload.facts);
       queryClient.setQueryData(['clock'], payload.clock);
+      // The stream only carries the count; refetch the list when it changes.
+      const known = queryClient.getQueryData<ApprovalsList>(['approvals']);
+      if (known?.pending.length !== payload.approvals.pending) {
+        void queryClient.invalidateQueries({ queryKey: ['approvals'] });
+      }
     });
     return () => {
       source.close();

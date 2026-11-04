@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { PROPOSE_HIRE_TOOL } from '@ai-village/agent';
 import { createApp } from './app.js';
 
 const tempDirs: string[] = [];
@@ -286,5 +287,106 @@ describe('GET /api/events', () => {
     expect(second).toContain('"hour":10');
 
     await reader.cancel();
+  });
+});
+
+describe('/api/approvals', () => {
+  async function post(
+    app: { request: (path: string, init?: RequestInit) => Response | Promise<Response> },
+    id: number,
+    decision: string,
+  ) {
+    return app.request(`/api/approvals/${id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision }),
+    });
+  }
+
+  it('starts with nothing waiting', async () => {
+    const { app } = await createLiveTestApp();
+    const response = await app.request('/api/approvals');
+    expect(await response.json()).toEqual({ pending: [], decided: [] });
+  });
+
+  it("lists a Mayor's hire request, and approving it actually hires someone", async () => {
+    const { app, village, getState } = await createLiveTestApp();
+    const request = await village.requestApproval(
+      PROPOSE_HIRE_TOOL,
+      { tradeId: 'fisher', reason: 'nobody fishes yet' },
+      'hesper',
+    );
+
+    const listed = (await (await app.request('/api/approvals')).json()) as {
+      pending: { id: number; preview: string }[];
+    };
+    expect(listed.pending).toHaveLength(1);
+    expect(listed.pending[0]?.preview).toBe('Hire a fisher: nobody fishes yet');
+
+    const before = getState().villagers.length;
+    const response = await post(app, request.id, 'approved');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ id: request.id, status: 'approved' });
+    expect(getState().villagers).toHaveLength(before + 1);
+    expect(getState().villagers.some((v) => v.tradeId === 'fisher')).toBe(true);
+  });
+
+  it('declining changes nothing in the village', async () => {
+    const { app, village, getState } = await createLiveTestApp();
+    const request = await village.requestApproval(
+      PROPOSE_HIRE_TOOL,
+      { tradeId: 'fisher', reason: 'why not' },
+      'hesper',
+    );
+    const before = getState().villagers.length;
+    expect((await post(app, request.id, 'declined')).status).toBe(200);
+    expect(getState().villagers).toHaveLength(before);
+    const listed = (await (await app.request('/api/approvals')).json()) as {
+      pending: unknown[];
+      decided: { status: string }[];
+    };
+    expect(listed.pending).toEqual([]);
+    expect(listed.decided[0]?.status).toBe('declined');
+  });
+
+  it("won't decide the same request twice, or one that doesn't exist", async () => {
+    const { app, village } = await createLiveTestApp();
+    const request = await village.requestApproval(
+      PROPOSE_HIRE_TOOL,
+      { tradeId: 'fisher', reason: 'why not' },
+      'hesper',
+    );
+    await post(app, request.id, 'declined');
+    expect((await post(app, request.id, 'approved')).status).toBe(409);
+    expect((await post(app, 999, 'approved')).status).toBe(404);
+    expect((await post(app, request.id, 'maybe')).status).toBe(400);
+  });
+
+  it('keeps a request pending when the tool itself refuses', async () => {
+    const { app, village } = await createLiveTestApp();
+    const request = await village.requestApproval(
+      PROPOSE_HIRE_TOOL,
+      { tradeId: 'astronaut', reason: 'space' },
+      'hesper',
+    );
+    const response = await post(app, request.id, 'approved');
+    expect(response.status).toBe(409);
+    expect(village.inbox.requests[0]?.status).toBe('pending');
+  });
+
+  it('survives a restart', async () => {
+    const clock = fakeClock();
+    const first = await createLiveTestApp(undefined, clock);
+    await first.village.requestApproval(
+      PROPOSE_HIRE_TOOL,
+      { tradeId: 'fisher', reason: 'why not' },
+      'hesper',
+    );
+    await first.closeDb();
+    closers.splice(closers.indexOf(first.closeDb), 1);
+
+    const second = await createLiveTestApp(first.dbPath, clock);
+    expect(second.village.inbox.requests).toHaveLength(1);
+    expect(second.village.inbox.nextId).toBe(2);
   });
 });

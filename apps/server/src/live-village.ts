@@ -1,4 +1,23 @@
-import { loadVillage, saveVillage, type Database } from '@ai-village/db';
+import {
+  createApprovalsInbox,
+  decideApproval,
+  requestApproval,
+  SIM_TOOLS,
+  ToolRegistry,
+  type ApprovalRequest,
+  type ApprovalsInbox,
+  type ApprovalStatus,
+  type ToolDefinition,
+  type ToolRisk,
+} from '@ai-village/agent';
+import {
+  loadApprovals,
+  loadVillage,
+  saveApprovals,
+  saveVillage,
+  type ApprovalRow,
+  type Database,
+} from '@ai-village/db';
 import {
   catchUpLiveClock,
   clockSettingsSchema,
@@ -25,6 +44,27 @@ export interface LiveVillageOptions {
   saveEveryMs?: number;
 }
 
+/** Every tool an approval can name - an approved request runs through this. */
+const TOOL_REGISTRY = new ToolRegistry();
+for (const tool of SIM_TOOLS) {
+  TOOL_REGISTRY.register(tool);
+}
+
+function toApprovalRows(inbox: ApprovalsInbox): ApprovalRow[] {
+  return inbox.requests.map((request) => ({ ...request }));
+}
+
+function fromApprovalRows(rows: readonly ApprovalRow[]): ApprovalsInbox {
+  return {
+    requests: rows.map((row) => ({
+      ...row,
+      risk: row.risk as ToolRisk,
+      status: row.status as ApprovalStatus,
+    })),
+    nextId: rows.reduce((max, row) => Math.max(max, row.id + 1), 1),
+  };
+}
+
 /** What changed in one update, for anyone listening. */
 export interface VillageChange {
   /** Days whose systems just ran, oldest first. */
@@ -45,6 +85,7 @@ type Listener = (change: VillageChange) => void;
  */
 export class LiveVillage {
   private current: VillageState;
+  private approvals: ApprovalsInbox;
   private lastTickAt: number;
   private lastSaveAt: number;
   private saving: Promise<void> = Promise.resolve();
@@ -54,8 +95,9 @@ export class LiveVillage {
   private readonly settings: ClockSettings;
   private readonly saveEveryMs: number;
 
-  private constructor(state: VillageState, options: LiveVillageOptions) {
+  private constructor(state: VillageState, inbox: ApprovalsInbox, options: LiveVillageOptions) {
     this.current = state;
+    this.approvals = inbox;
     this.db = options.db;
     this.now = options.now ?? Date.now;
     this.settings = options.settings ?? clockSettingsSchema.parse({});
@@ -84,13 +126,57 @@ export class LiveVillage {
       state = settleDueDays(options.bootstrap()).state;
     }
 
-    const village = new LiveVillage(state, options);
+    const inbox = snapshot
+      ? fromApprovalRows(await loadApprovals(options.db))
+      : createApprovalsInbox();
+
+    const village = new LiveVillage(state, inbox, options);
     await village.save();
     return village;
   }
 
   get state(): VillageState {
     return this.current;
+  }
+
+  /** Spec section 12's approvals inbox: every tool call waiting on, or decided by, the owner. */
+  get inbox(): ApprovalsInbox {
+    return this.approvals;
+  }
+
+  /** Queues a tool call for the owner to decide - how a villager's turn asks for something risky. */
+  async requestApproval(
+    tool: ToolDefinition,
+    args: unknown,
+    requestedBy: string,
+  ): Promise<ApprovalRequest> {
+    const { inbox, request } = requestApproval(this.approvals, tool, args, requestedBy, this.now());
+    this.approvals = inbox;
+    await this.save();
+    this.notify({ settled: [] });
+    return request;
+  }
+
+  /**
+   * The owner's decision. Approving runs the tool now, against the
+   * village as it is (`decideApproval`); if that fails - say, no free
+   * names are left for a hire - nothing changes and the error is thrown,
+   * so the request stays pending for the owner to decline instead.
+   */
+  async decide(
+    id: number,
+    decision: Extract<ApprovalStatus, 'approved' | 'declined'>,
+  ): Promise<ApprovalRequest> {
+    const result = decideApproval(this.approvals, TOOL_REGISTRY, id, decision, this.current);
+    this.approvals = result.inbox;
+    this.current = result.state;
+    await this.save();
+    this.notify({ settled: [] });
+    const decided = this.approvals.requests.find((request) => request.id === id);
+    if (!decided) {
+      throw new Error(`Unknown approval #${id}`);
+    }
+    return decided;
   }
 
   /** Real time since the last tick passes on the village clock; any day it reaches is settled. */
@@ -141,7 +227,13 @@ export class LiveVillage {
   save(): Promise<void> {
     this.lastSaveAt = this.now();
     const snapshot = toSnapshot(this.current, this.lastSaveAt);
-    this.saving = this.saving.catch(() => undefined).then(() => saveVillage(this.db, snapshot));
+    const approvals = toApprovalRows(this.approvals);
+    this.saving = this.saving
+      .catch(() => undefined)
+      .then(async () => {
+        await saveVillage(this.db, snapshot);
+        await saveApprovals(this.db, approvals);
+      });
     return this.saving;
   }
 

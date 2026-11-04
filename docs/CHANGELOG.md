@@ -292,3 +292,8 @@
 - Nobody works, or is paid, at a workplace that isn't built: a trade's
   workers fill its workplace's built instances in order, the same rule
   the map uses to place them, and anyone left over waits (#152).
+- The approvals inbox (spec section 12): an `approvals` table, owned by
+  the live village beside its state and saved with it;
+  `GET /api/approvals` and `POST /api/approvals/:id` to list and decide
+  requests (approving runs the tool; a tool that refuses leaves the
+  request pending); and an Inbox button with a count over the map (#154).

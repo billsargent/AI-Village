@@ -40,6 +40,32 @@ const FACTS: VillageFacts = {
   ],
 };
 
+function urlOf(input: RequestInfo | URL): string {
+  return typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+}
+
+/**
+ * A fetch stub for the whole server: `facts` for the village, an empty
+ * inbox, and the clock at 1x, plus anything in `extra` by path.
+ */
+function fetchServing(
+  facts: VillageFacts,
+  extra: Record<string, (init?: RequestInit) => unknown> = {},
+) {
+  return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = urlOf(input);
+    const match = Object.keys(extra).find((path) => url.includes(path));
+    const body = match
+      ? extra[match]?.(init)
+      : url.includes('/api/approvals')
+        ? { pending: [], decided: [] }
+        : url.includes('/api/clock')
+          ? { speed: 1, paused: false }
+          : facts;
+    return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+  });
+}
+
 function renderApp() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -51,10 +77,7 @@ function renderApp() {
 
 describe('App', () => {
   beforeEach(() => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(() => Promise.resolve(new Response(JSON.stringify(FACTS), { status: 200 }))),
-    );
+    vi.stubGlobal('fetch', fetchServing(FACTS));
   });
 
   afterEach(() => {
@@ -83,10 +106,7 @@ describe('App', () => {
       villagers: [{ id: 'finn', tradeId: 'fisher', role: 'villager' }],
       builtBuildingIds: ['riverside-jetty'],
     };
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(() => Promise.resolve(new Response(JSON.stringify(facts), { status: 200 }))),
-    );
+    vi.stubGlobal('fetch', fetchServing(facts));
     renderApp();
 
     await screen.findByLabelText(/Moonday, spring day 1/);
@@ -99,10 +119,7 @@ describe('App', () => {
 
   it('looks inside a furnished building and back out again', async () => {
     const facts: VillageFacts = { ...FACTS, builtBuildingIds: ['cottage'] };
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(() => Promise.resolve(new Response(JSON.stringify(facts), { status: 200 }))),
-    );
+    vi.stubGlobal('fetch', fetchServing(facts));
     renderApp();
 
     await screen.findByLabelText(/Moonday, spring day 1/);
@@ -147,10 +164,7 @@ describe('App', () => {
 
   it("shows a hint to click town-hall's bookshelf, chest and book, but no panels yet", async () => {
     const facts: VillageFacts = { ...FACTS, builtBuildingIds: ['town-hall'] };
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(() => Promise.resolve(new Response(JSON.stringify(facts), { status: 200 }))),
-    );
+    vi.stubGlobal('fetch', fetchServing(facts));
     renderApp();
 
     await screen.findByLabelText(/Moonday, spring day 1/);
@@ -168,10 +182,7 @@ describe('App', () => {
 
   it("shows a hint to click shop's counter, but no stores panel yet", async () => {
     const facts: VillageFacts = { ...FACTS, builtBuildingIds: ['shop'] };
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(() => Promise.resolve(new Response(JSON.stringify(facts), { status: 200 }))),
-    );
+    vi.stubGlobal('fetch', fetchServing(facts));
     renderApp();
 
     await screen.findByLabelText(/Moonday, spring day 1/);
@@ -183,10 +194,7 @@ describe('App', () => {
 
   it("doesn't show the bookshelf hint for a building without one", async () => {
     const facts: VillageFacts = { ...FACTS, builtBuildingIds: ['cottage'] };
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(() => Promise.resolve(new Response(JSON.stringify(facts), { status: 200 }))),
-    );
+    vi.stubGlobal('fetch', fetchServing(facts));
     renderApp();
 
     await screen.findByLabelText(/Moonday, spring day 1/);
@@ -220,18 +228,15 @@ describe('App', () => {
     const posted: unknown[] = [];
     vi.stubGlobal(
       'fetch',
-      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-        const url =
-          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-        if (url.includes('/api/clock')) {
+      fetchServing(FACTS, {
+        '/api/clock': (init) => {
           if (init?.method === 'POST') {
             const body = JSON.parse(init.body as string) as { speed: number };
             posted.push(body);
             clock = { speed: body.speed, paused: body.speed === 0 };
           }
-          return Promise.resolve(new Response(JSON.stringify(clock), { status: 200 }));
-        }
-        return Promise.resolve(new Response(JSON.stringify(FACTS), { status: 200 }));
+          return clock;
+        },
       }),
     );
     renderApp();
@@ -316,5 +321,53 @@ describe('App', () => {
 
       expect(await screen.findByText('DeepSeek API key: not set')).toBeTruthy();
     });
+  });
+});
+
+describe('the inbox', () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const HIRE = {
+    id: 1,
+    toolId: 'propose_hire',
+    args: { tradeId: 'fisher', reason: 'nobody fishes yet' },
+    risk: 'medium',
+    preview: 'Hire a fisher: nobody fishes yet',
+    requestedBy: 'hesper',
+    status: 'pending',
+    createdAt: 0,
+  };
+
+  it('shows how many approvals are waiting, and approving one sends the decision', async () => {
+    let pending = [HIRE];
+    const decisions: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      fetchServing(FACTS, {
+        '/api/approvals/1': (init) => {
+          decisions.push(JSON.parse(init?.body as string));
+          pending = [];
+          return { ...HIRE, status: 'approved' };
+        },
+        '/api/approvals': () => ({ pending, decided: [] }),
+      }),
+    );
+    renderApp();
+
+    const bell = await screen.findByRole('button', { name: 'Inbox: 1 waiting on you' });
+    fireEvent.click(bell);
+    expect(await screen.findByText('Hire a fisher: nobody fishes yet')).toBeTruthy();
+    expect(screen.getByText('Asked by hesper - medium risk')).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Approve: Hire a fisher: nobody fishes yet' }),
+    );
+
+    expect(await screen.findByText('Nothing is waiting on you.')).toBeTruthy();
+    expect(decisions).toEqual([{ decision: 'approved' }]);
+    expect(screen.getByRole('button', { name: 'Inbox' })).toBeTruthy();
   });
 });
