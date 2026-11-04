@@ -73,9 +73,10 @@ const PLOTS: readonly Plot[] = [
   { buildingId: 'cottage', slot: 5, map: 'main', x: 42, y: 41 },
   { buildingId: 'cottage-garden', slot: 0, map: 'main', x: 50, y: 41 },
 
-  // Riverside (its own map, reached by the signpost over the footbridge)
-  { buildingId: 'riverside-jetty', slot: 0, map: 'riverside', x: 2, y: 2 },
-  { buildingId: 'smokehouse', slot: 0, map: 'riverside', x: 10, y: 2 },
+  // Riverside (its own map, reached by the signpost over the footbridge).
+  // The jetty sits below the shore path and reaches out into the river.
+  { buildingId: 'riverside-jetty', slot: 0, map: 'riverside', x: 2, y: 8 },
+  { buildingId: 'smokehouse', slot: 0, map: 'riverside', x: 10, y: 1 },
 
   // Forest (its own map, reached by the signpost north of Civic Row)
   { buildingId: 'forest-hut', slot: 0, map: 'forest', x: 4, y: 4 },

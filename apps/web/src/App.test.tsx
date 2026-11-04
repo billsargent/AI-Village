@@ -94,7 +94,7 @@ describe('App', () => {
 
     fireEvent.click(screen.getByText('Riverside'));
 
-    expect(await screen.findByText('finn is working at (2, 2)')).toBeTruthy();
+    expect(await screen.findByText('finn is working at (2, 8)')).toBeTruthy();
   });
 
   it('looks inside a furnished building and back out again', async () => {

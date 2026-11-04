@@ -55,7 +55,7 @@ describe('builtBuildingsNow', () => {
     const placed = builtBuildingsNow(facts, 'riverside');
     const jetty = placed.find((b) => b.buildingId === 'riverside-jetty');
     expect(jetty?.x).toBe(2);
-    expect(jetty?.y).toBe(2);
+    expect(jetty?.y).toBe(8);
   });
 
   it("doesn't place a Riverside building when asked for the Forest map", () => {
@@ -98,32 +98,56 @@ describe('whereaboutsNow', () => {
 });
 
 describe('planCanvasDraw', () => {
-  it('fits a fallback-sized empty canvas when nothing is built or staffed', () => {
+  it('always lays out the whole map, even with nothing built', () => {
     const facts: VillageFacts = { ...BASE_FACTS, villagers: [], builtBuildingIds: [] };
     const plan = planCanvasDraw(facts);
     expect(plan.buildings).toEqual([]);
     expect(plan.villagers).toEqual([]);
-    expect(plan.width).toBeGreaterThan(0);
-    expect(plan.height).toBeGreaterThan(0);
+    expect(plan.width).toBe(MAPS.main.widthTiles * TILE_PX);
+    expect(plan.height).toBe(MAPS.main.heightTiles * TILE_PX);
+    expect(plan.ground.length).toBeGreaterThan(0);
+    expect(plan.standing.length).toBeGreaterThan(0);
   });
 
-  it('places every drawn sprite within the plan bounds, with margin', () => {
-    const plan = planCanvasDraw(BASE_FACTS);
-    expect(plan.buildings.length).toBeGreaterThan(0);
-    expect(plan.villagers.length).toBeGreaterThan(0);
-    for (const item of [...plan.buildings, ...plan.villagers]) {
-      expect(item.x).toBeGreaterThanOrEqual(0);
-      expect(item.y).toBeGreaterThanOrEqual(0);
-      expect(item.x).toBeLessThan(plan.width);
-      expect(item.y).toBeLessThan(plan.height);
-    }
-  });
-
-  it("fits an empty Riverside map to its own real dimensions, not the main map's", () => {
+  it("lays out the Riverside map at its own real dimensions, not the main map's", () => {
     const facts: VillageFacts = { ...BASE_FACTS, villagers: [], builtBuildingIds: [] };
     const plan = planCanvasDraw(facts, 'riverside');
     expect(plan.width).toBe(MAPS.riverside.widthTiles * TILE_PX);
     expect(plan.height).toBe(MAPS.riverside.heightTiles * TILE_PX);
+  });
+
+  it('sits a building at the bottom-centre of its plot, facing the road', () => {
+    const plan = planCanvasDraw(BASE_FACTS);
+    const townHall = plan.buildings.find((b) => b.buildingId === 'town-hall');
+    expect(townHall).toBeDefined();
+    if (!townHall) return;
+    // Town hall: plot (26,2), 9x7 tiles, sprite 5x4 tiles.
+    expect(townHall.x).toBe((26 + 2) * TILE_PX);
+    expect(townHall.y + townHall.sprite.height).toBe((2 + 7) * TILE_PX);
+  });
+
+  it("stands a worker just outside their building's door", () => {
+    const plan = planCanvasDraw(BASE_FACTS);
+    const mayor = plan.villagers.find((v) => v.villager.id === 'hesper');
+    expect(mayor?.x).toBe((26 + 4) * TILE_PX);
+    expect(mayor?.y).toBe((2 + 7) * TILE_PX);
+  });
+
+  it('depth-sorts standing sprites by their bottom edge', () => {
+    const plan = planCanvasDraw(BASE_FACTS);
+    const bottoms = plan.standing.map((s) => s.y + s.sprite.height);
+    expect(bottoms).toEqual([...bottoms].sort((a, b) => a - b));
+  });
+
+  it("clears an empty plot's scrub once something is built on it", () => {
+    const empty: VillageFacts = { ...BASE_FACTS, villagers: [], builtBuildingIds: [] };
+    const withHall: VillageFacts = { ...empty, builtBuildingIds: ['town-hall'] };
+    const onHallPlot = (plan: ReturnType<typeof planCanvasDraw>) =>
+      [...plan.groundDecor, ...plan.standing.filter((s) => s.kind === 'decor')].filter(
+        (d) => d.x >= 26 * TILE_PX && d.x < 35 * TILE_PX && d.y >= 2 * TILE_PX && d.y < 9 * TILE_PX,
+      ).length;
+    expect(onHallPlot(planCanvasDraw(empty))).toBeGreaterThan(0);
+    expect(onHallPlot(planCanvasDraw(withHall))).toBe(0);
   });
 
   it('draws a built Riverside building when asked for the Riverside map', () => {
