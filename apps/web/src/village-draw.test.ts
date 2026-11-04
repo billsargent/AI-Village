@@ -1,3 +1,4 @@
+import { MAPS, TILE_PX } from '@ai-village/content';
 import { describe, expect, it } from 'vitest';
 import { builtBuildingsNow, planCanvasDraw, whereaboutsNow } from './village-draw.js';
 import type { VillageFacts } from './village-api.js';
@@ -40,12 +41,25 @@ describe('builtBuildingsNow', () => {
     expect(builtBuildingsNow(facts)).toEqual([]);
   });
 
-  it("skips a building on the Riverside or Forest map - it's not a main-map coordinate", () => {
+  it('skips a building on the Riverside or Forest map when asked for the main map', () => {
     const facts: VillageFacts = {
       ...BASE_FACTS,
       builtBuildingIds: ['riverside-jetty', 'smokehouse', 'forest-hut'],
     };
     expect(builtBuildingsNow(facts)).toEqual([]);
+  });
+
+  it('places a building on the Riverside map when asked for it', () => {
+    const facts: VillageFacts = { ...BASE_FACTS, builtBuildingIds: ['riverside-jetty'] };
+    const placed = builtBuildingsNow(facts, 'riverside');
+    const jetty = placed.find((b) => b.buildingId === 'riverside-jetty');
+    expect(jetty?.x).toBe(2);
+    expect(jetty?.y).toBe(2);
+  });
+
+  it("doesn't place a Riverside building when asked for the Forest map", () => {
+    const facts: VillageFacts = { ...BASE_FACTS, builtBuildingIds: ['riverside-jetty'] };
+    expect(builtBuildingsNow(facts, 'forest')).toEqual([]);
   });
 });
 
@@ -62,13 +76,23 @@ describe('whereaboutsNow', () => {
     expect(placed.some((p) => p.villager.id === 'ada')).toBe(false);
   });
 
-  it("doesn't place a worker whose workplace is on the Riverside or Forest map", () => {
+  it("doesn't place a worker whose workplace is on the Riverside or Forest map when asked for the main map", () => {
     const facts: VillageFacts = {
       ...BASE_FACTS,
       villagers: [{ id: 'finn', tradeId: 'fisher', role: 'villager' }],
       builtBuildingIds: ['riverside-jetty'],
     };
     expect(whereaboutsNow(facts)).toEqual([]);
+  });
+
+  it('places a worker on the Riverside map when asked for it', () => {
+    const facts: VillageFacts = {
+      ...BASE_FACTS,
+      villagers: [{ id: 'finn', tradeId: 'fisher', role: 'villager' }],
+      builtBuildingIds: ['riverside-jetty'],
+    };
+    const placed = whereaboutsNow(facts, 'riverside');
+    expect(placed.some((p) => p.villager.id === 'finn')).toBe(true);
   });
 });
 
@@ -92,5 +116,18 @@ describe('planCanvasDraw', () => {
       expect(item.x).toBeLessThan(plan.width);
       expect(item.y).toBeLessThan(plan.height);
     }
+  });
+
+  it("fits an empty Riverside map to its own real dimensions, not the main map's", () => {
+    const facts: VillageFacts = { ...BASE_FACTS, villagers: [], builtBuildingIds: [] };
+    const plan = planCanvasDraw(facts, 'riverside');
+    expect(plan.width).toBe(MAPS.riverside.widthTiles * TILE_PX);
+    expect(plan.height).toBe(MAPS.riverside.heightTiles * TILE_PX);
+  });
+
+  it('draws a built Riverside building when asked for the Riverside map', () => {
+    const facts: VillageFacts = { ...BASE_FACTS, villagers: [], builtBuildingIds: ['smokehouse'] };
+    const plan = planCanvasDraw(facts, 'riverside');
+    expect(plan.buildings.length).toBe(1);
   });
 });
