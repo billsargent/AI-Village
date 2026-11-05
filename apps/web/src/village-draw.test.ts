@@ -32,6 +32,7 @@ const BASE_FACTS: VillageFacts = {
   recentChronicle: [],
   festivals: [],
   boardPosts: [],
+  constructionSites: [],
 };
 
 describe('builtBuildingsNow', () => {

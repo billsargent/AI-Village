@@ -1,7 +1,11 @@
 import type { BuildingId, FurnitureKind, MapId } from '@ai-village/content';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { buildingSummary, namesList } from './building-card.js';
+import { BuildPanel } from './BuildPanel.js';
 import { ChatPanel } from './ChatPanel.js';
+import { Toasts } from './Toasts.js';
+import { VillagersPage } from './VillagersPage.js';
+import type { PixelRect } from './village-draw.js';
 import { Gazette } from './Gazette.js';
 import { WorkAlong } from './WorkAlong.js';
 import { CommandPalette, type PaletteItem } from './CommandPalette.js';
@@ -17,6 +21,7 @@ import {
   usePendingApprovalCount,
   usePinNote,
   useSetClockSpeed,
+  useSettingsStatus,
   useVillageFacts,
   type ClockSpeed,
   type VillageFacts,
@@ -131,9 +136,31 @@ function Clock({ data }: { data: VillageFacts }) {
         <img src="/ui/coin.png" alt="" className="h-[21px] w-[21px] [image-rendering:pixelated]" />
         {data.treasuryCoins}
       </div>
+      <Spend />
       <SpeedControls />
       <WorkAlong />
     </div>
+  );
+}
+
+/** Spec section 14's top bar: "today's real spend against budget" - this month's, here. */
+function Spend() {
+  const { data: settings } = useSettingsStatus();
+  if (
+    typeof settings?.spentThisMonthUsd !== 'number' ||
+    (settings.spentThisMonthUsd === 0 && settings.monthlyCeilingUsd === null)
+  ) {
+    return null;
+  }
+  const spent = '$' + settings.spentThisMonthUsd.toFixed(settings.spentThisMonthUsd < 1 ? 4 : 2);
+  return (
+    <p className="text-xs text-ink-soft" aria-label="Model spend this month">
+      Spent {spent}
+      {typeof settings.monthlyCeilingUsd === 'number'
+        ? ' of $' + settings.monthlyCeilingUsd.toFixed(2)
+        : ''}{' '}
+      this month
+    </p>
   );
 }
 
@@ -181,6 +208,9 @@ export function App() {
   const [showJournal, setShowJournal] = useState(true);
   const [showInbox, setShowInbox] = useState(false);
   const [showGazette, setShowGazette] = useState(false);
+  const [showBuild, setShowBuild] = useState(false);
+  const [showVillagers, setShowVillagers] = useState(false);
+  const [highlight, setHighlight] = useState<(PixelRect & { map: MapId }) | null>(null);
   const [chatWith, setChatWith] = useState<string | null>(null);
   const [cardFor, setCardFor] = useState<string | null>(null);
   const [buildingCard, setBuildingCard] = useState<{ buildingId: string; slot: number } | null>(
@@ -202,6 +232,8 @@ export function App() {
     showSettings ||
     showInbox ||
     showGazette ||
+    showBuild ||
+    showVillagers ||
     showPalette ||
     chatWith !== null ||
     cardFor !== null ||
@@ -264,6 +296,10 @@ export function App() {
         setShowInbox(true);
       } else if (event.key === 'n') {
         setShowGazette(true);
+      } else if (event.key === 'b') {
+        setShowBuild(true);
+      } else if (event.key === 'v') {
+        setShowVillagers(true);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -358,6 +394,24 @@ export function App() {
       },
     },
     {
+      id: 'build',
+      label: 'Build',
+      hint: 'Put up a building',
+      keywords: 'construct building new',
+      run: () => {
+        setShowBuild(true);
+      },
+    },
+    {
+      id: 'villagers',
+      label: 'Villagers',
+      hint: 'Everyone at a glance',
+      keywords: 'people roster',
+      run: () => {
+        setShowVillagers(true);
+      },
+    },
+    {
       id: 'gazette',
       label: 'The Morning Gazette',
       hint: 'The village paper',
@@ -421,6 +475,7 @@ export function App() {
             setBuildingCard({ buildingId, slot });
           }}
           follow={following}
+          highlight={showBuild ? highlight : null}
           onStopFollowing={() => {
             setFollowing(null);
           }}
@@ -513,6 +568,24 @@ export function App() {
             }}
           >
             Gazette
+          </button>
+          <button
+            type="button"
+            className="wood-button"
+            onClick={() => {
+              setShowBuild(true);
+            }}
+          >
+            Build
+          </button>
+          <button
+            type="button"
+            className="wood-button"
+            onClick={() => {
+              setShowVillagers(true);
+            }}
+          >
+            Villagers
           </button>
           <button
             type="button"
@@ -817,6 +890,37 @@ export function App() {
           <InboxPanel />
         </Dialog>
       )}
+
+      {showBuild && (
+        <Dialog
+          title="Build"
+          onClose={() => {
+            setShowBuild(false);
+            setHighlight(null);
+          }}
+        >
+          <BuildPanel data={data} onHighlight={setHighlight} />
+        </Dialog>
+      )}
+
+      {showVillagers && (
+        <Dialog
+          title="Villagers"
+          onClose={() => {
+            setShowVillagers(false);
+          }}
+        >
+          <VillagersPage
+            whereabouts={new Map(whereabouts.map((entry) => [entry.villager.id, entry.where]))}
+            onOpen={(villagerId) => {
+              setShowVillagers(false);
+              setCardFor(villagerId);
+            }}
+          />
+        </Dialog>
+      )}
+
+      <Toasts chronicle={data.recentChronicle} />
 
       {showGazette && (
         <Dialog

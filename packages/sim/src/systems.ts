@@ -74,6 +74,13 @@ export const SYSTEM_ORDER = [
 ] as const;
 export type SystemName = (typeof SYSTEM_ORDER)[number];
 
+/** A building going up (spec section 6's build days): finished by the day's settle on `finishesOnDay`. */
+export interface ConstructionSite {
+  buildingId: string;
+  /** The absolute village day it stands finished. */
+  finishesOnDay: number;
+}
+
 export interface VillageState {
   villageSeed: number;
   clock: ClockState;
@@ -82,6 +89,8 @@ export interface VillageState {
   villagers: readonly WorkerAssignment[];
   villagerNeeds: Readonly<Record<string, Needs>>;
   builtBuildingIds: readonly string[];
+  /** Buildings still going up, in the order they were started. */
+  constructionSites: readonly ConstructionSite[];
   storytellerStyle: StorytellerStyle;
   chronicle: Chronicle;
   daysSinceLastHappening: number;
@@ -153,6 +162,7 @@ export function createVillage(villageSeed: number, scenario: VillageScenario = {
     villagers,
     villagerNeeds: Object.fromEntries(villagers.map((v) => [v.villagerId, createNeeds()])),
     builtBuildingIds: scenario.builtBuildingIds ?? [],
+    constructionSites: [],
     storytellerStyle: scenario.storytellerStyle ?? 'lively',
     chronicle: [],
     daysSinceLastHappening: 0,
@@ -428,6 +438,25 @@ export function settleDay(state: VillageState): { state: VillageState; report: D
   // the board: archive any post past its retention window
   const board = archiveOldBoardPosts(state.board, date.absoluteDay);
 
+  // construction: anything due by tomorrow morning stands finished
+  const finishing = state.constructionSites.filter(
+    (site) => site.finishesOnDay <= date.absoluteDay + 1,
+  );
+  const constructionSites = state.constructionSites.filter(
+    (site) => site.finishesOnDay > date.absoluteDay + 1,
+  );
+  const builtBuildingIds = [...state.builtBuildingIds, ...finishing.map((site) => site.buildingId)];
+  for (const site of finishing) {
+    chronicle = appendChronicle(chronicle, {
+      minute: state.clock.minute,
+      kind: 'building',
+      text: `The ${site.buildingId.replace(/-/g, ' ')} is finished.`,
+      actors: [],
+      importance: 4,
+      public: true,
+    });
+  }
+
   // social: an evening interaction for every pair of villagers
   const villagerIds = state.villagers.map((v) => v.villagerId);
   const traitsById = new Map(state.villagers.map((v) => [v.villagerId, v.traits]));
@@ -480,6 +509,8 @@ export function settleDay(state: VillageState): { state: VillageState; report: D
     relationships,
     orders,
     board,
+    builtBuildingIds,
+    constructionSites,
   };
 
   return { state: nextState, report: { day: date.absoluteDay, date, weather, waiting, happening } };

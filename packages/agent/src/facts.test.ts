@@ -135,6 +135,19 @@ describe('renderFacts', () => {
   });
 });
 
+describe('building sites in the facts', () => {
+  it('lists what is going up, on which plot, and how many days are left', () => {
+    const village = createVillage(1, {
+      builtBuildingIds: ['fields'],
+      startingStock: [{ account: 'treasury', item: 'coins', qty: 100 }],
+    });
+    const state = apply(village, { kind: 'ProposeBuilding', buildingId: 'fields' }).state;
+    const snapshot = facts(state, 'owner', 'chat');
+    expect(snapshot.constructionSites).toEqual([{ buildingId: 'fields', slot: 1, daysLeft: 1 }]);
+    expect(renderFacts(snapshot)).toContain('Being built: fields (1 day left)');
+  });
+});
+
 describe('the notice board in the facts', () => {
   it('carries the newest posts, newest first, and puts them in the facts block', () => {
     let state = createVillage(1, {

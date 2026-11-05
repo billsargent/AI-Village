@@ -28,6 +28,7 @@ const FACTS: VillageFacts = {
   ],
   festivals: [{ name: 'Sowing Fair', season: 'spring', seasonDay: 7 }],
   boardPosts: [],
+  constructionSites: [],
 };
 
 function urlOf(input: RequestInfo | URL): string {

@@ -31,6 +31,7 @@ const FACTS: VillageFacts = {
   recentChronicle: [],
   festivals: [],
   boardPosts: [],
+  constructionSites: [],
 };
 
 describe('glowsFor', () => {

@@ -28,6 +28,7 @@ const FACTS: VillageFacts = {
   recentChronicle: [],
   festivals: [],
   boardPosts: [],
+  constructionSites: [],
 };
 
 function urlOf(input: RequestInfo | URL): string {
@@ -50,6 +51,14 @@ function stubFetch() {
           clock = { speed: posted.speed, paused: posted.speed === 0 };
         }
         body = clock;
+      } else if (url.includes('/api/settings')) {
+        body = {
+          hasDeepseekApiKey: false,
+          mayorAutonomy: false,
+          monthlyCeilingUsd: null,
+          spentThisMonthUsd: 0,
+          mayorLastTurn: null,
+        };
       } else if (url.includes('/api/approvals')) {
         body = { pending: [], decided: [] };
       } else if (url.includes('/api/villagers/')) {

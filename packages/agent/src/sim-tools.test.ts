@@ -78,8 +78,11 @@ describe('PROPOSE_BUILDING_TOOL', () => {
       events: unknown[];
     };
 
-    expect(result.state.builtBuildingIds).toContain('fields');
-    expect(result.events).toEqual([{ kind: 'BuildingFinished', buildingId: 'fields' }]);
+    // Fields take a day to dig: they start as a site.
+    expect(result.state.constructionSites).toEqual([{ buildingId: 'fields', finishesOnDay: 1 }]);
+    expect(result.events).toEqual([
+      { kind: 'BuildingStarted', buildingId: 'fields', finishesOnDay: 1 },
+    ]);
   });
 
   it('is a risk-none game action granted to the Mayor role', () => {

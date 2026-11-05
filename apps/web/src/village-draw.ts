@@ -159,9 +159,19 @@ export interface DrawnSprite {
   y: number;
 }
 
+/** A rectangle on the map, in map pixels. */
+export interface PixelRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface BuildingDrawnSprite extends DrawnSprite {
   buildingId: string;
   slot: number;
+  /** The whole plot it stands on. */
+  footprint: PixelRect;
 }
 
 /** Anything that stands up, drawn in order of its bottom edge so nearer things cover farther ones. */
@@ -183,6 +193,8 @@ export interface CanvasDrawPlan {
    */
   standing: readonly StandingSprite[];
   buildings: readonly BuildingDrawnSprite[];
+  /** Buildings going up on this map: their plots, and how long they've left. */
+  sites: readonly (PixelRect & { buildingId: string; slot: number; daysLeft: number })[];
 }
 
 function footprintOf(buildingId: string): readonly [number, number] {
@@ -204,6 +216,7 @@ export function planCanvasDraw(data: VillageFacts, map: MapId = 'main'): CanvasD
     return {
       buildingId: building.buildingId,
       slot: building.slot,
+      footprint: { x: plotX, y: plotY, width: fw * TILE_PX, height: fh * TILE_PX },
       sprite: building.sprite,
       x: plotX + Math.floor((fw * TILE_PX - building.sprite.width) / 2 / TILE_PX) * TILE_PX,
       y: plotY + fh * TILE_PX - building.sprite.height,
@@ -224,6 +237,10 @@ export function planCanvasDraw(data: VillageFacts, map: MapId = 'main'): CanvasD
     slots.set(buildingId, slot + 1);
     builtPlots.add(plotKey(buildingId, slot));
   }
+  // A building site is cleared ground too.
+  for (const site of data.constructionSites) {
+    builtPlots.add(plotKey(site.buildingId, site.slot));
+  }
   const decor = decorFor(map).filter((item) => !item.plot || !builtPlots.has(item.plot));
 
   const standing: StandingSprite[] = [
@@ -240,5 +257,23 @@ export function planCanvasDraw(data: VillageFacts, map: MapId = 'main'): CanvasD
     groundDecor: decor.filter((d) => d.layer === 'ground').map(toPx),
     standing,
     buildings,
+    sites: data.constructionSites.flatMap((site) => {
+      const plot = getPlot(site.buildingId as BuildingId, site.slot);
+      if (!plot || plot.map !== map) {
+        return [];
+      }
+      const [fw, fh] = footprintOf(site.buildingId);
+      return [
+        {
+          buildingId: site.buildingId,
+          slot: site.slot,
+          daysLeft: site.daysLeft,
+          x: plot.x * TILE_PX,
+          y: plot.y * TILE_PX,
+          width: fw * TILE_PX,
+          height: fh * TILE_PX,
+        },
+      ];
+    }),
   };
 }

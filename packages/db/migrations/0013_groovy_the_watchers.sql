@@ -1,0 +1,1 @@
+ALTER TABLE `built_buildings` ADD `finishes_on_day` integer;

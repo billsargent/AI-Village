@@ -4,6 +4,8 @@ import {
   catSpot,
   CHICKEN_FRAMES,
   chickenSpots,
+  DIRT_TILES,
+  FENCE_TILES,
   dreamFor,
   FLOORBOARDS,
   getBuilding,
@@ -42,6 +44,8 @@ import { AtmosphereLayer, type AtmosphereState } from './atmosphere-layer.js';
 import { indoorLightAt, lightAt, lightWord } from './light.js';
 import { buildingSummary, whoIsIn } from './building-card.js';
 import { FestivalLayer } from './festival-layer.js';
+import { cropStage, fieldPixels } from './field-draw.js';
+import type { PixelRect } from './village-draw.js';
 import { TalkLayer } from './talk-layer.js';
 import { loadFrameTexture } from './load-frame-texture.js';
 import { Minimap, type MinimapView } from './Minimap.js';
@@ -126,6 +130,8 @@ export interface VillageCanvasProps {
   pace?: number | undefined;
   /** Clicking a villager - the app opens their card. */
   onVillagerClick?: ((villagerId: string) => void) | undefined;
+  /** A plot to outline on the map: where something would be built (the Build panel). */
+  highlight?: (PixelRect & { map: MapId }) | null | undefined;
   /** A villager for the camera to follow as they walk (spec section 14's Follow button). */
   follow?: string | null | undefined;
   /** The owner took the camera back - dragged, panned or used the minimap - so following ends. */
@@ -170,9 +176,85 @@ interface Walker {
 /** What the pointer is over, for the label under the map. */
 type Hovered =
   | { kind: 'building'; id: string; slot: number }
+  | { kind: 'site'; id: string; daysLeft: number }
   | { kind: 'animal'; id: string; label: string; where: string }
   | { kind: 'villager'; id: string; where: string }
   | { kind: 'furniture'; id: FurnitureKind };
+
+/** A field over its whole plot: tilled soil, the wooden fence, and the season's crop rows. */
+async function drawField(plot: PixelRect, stage: ReturnType<typeof cropStage>): Promise<Container> {
+  const field = new Container({ x: plot.x, y: plot.y });
+  const soil = new TilingSprite({
+    texture: await loadFrameTexture(DIRT_TILES.center),
+    x: TILE_PX / 2,
+    y: TILE_PX / 2,
+    width: plot.width - TILE_PX,
+    height: plot.height - TILE_PX,
+  });
+  const crops = new Graphics();
+  for (const pixel of fieldPixels(plot.width, plot.height, stage)) {
+    crops.rect(pixel.x, pixel.y, pixel.width, pixel.height).fill(pixel.colour);
+  }
+  field.addChild(soil, crops);
+  const across = plot.width / TILE_PX;
+  const down = plot.height / TILE_PX;
+  const fence = async (
+    frame: (typeof FENCE_TILES)[keyof typeof FENCE_TILES],
+    x: number,
+    y: number,
+  ) => {
+    field.addChild(
+      new Sprite({ texture: await loadFrameTexture(frame), x: x * TILE_PX, y: y * TILE_PX }),
+    );
+  };
+  for (let x = 0; x < across; x++) {
+    const top = x === 0 ? FENCE_TILES.nw : x === across - 1 ? FENCE_TILES.ne : FENCE_TILES.n;
+    const bottom = x === 0 ? FENCE_TILES.sw : x === across - 1 ? FENCE_TILES.se : FENCE_TILES.s;
+    await fence(top, x, 0);
+    await fence(bottom, x, down - 1);
+  }
+  for (let y = 1; y < down - 1; y++) {
+    await fence(FENCE_TILES.w, 0, y);
+    await fence(FENCE_TILES.e, across - 1, y);
+  }
+  return field;
+}
+
+/** A building site: bare earth, a timber frame going up, and a sign. */
+function drawSite(site: PixelRect): Container {
+  const view = new Container({ zIndex: site.y + site.height });
+  const timber = 0x8a5a2b;
+  const dark = 0x5a3a1a;
+  const frame = new Graphics()
+    .rect(site.x + 4, site.y + 4, site.width - 8, site.height - 8)
+    .fill({ color: 0xa9784a, alpha: 0.85 });
+  // Posts along the front and back, and the beams between them.
+  const left = site.x + 10;
+  const right = site.x + site.width - 12;
+  const top = site.y + site.height / 3;
+  const bottom = site.y + site.height - 10;
+  for (let x = left; x <= right; x += 16) {
+    frame.rect(x, top - 18, 3, bottom - top + 18).fill(timber);
+  }
+  frame
+    .rect(left, top - 18, right - left + 3, 3)
+    .fill(timber)
+    .rect(left, (top + bottom) / 2 - 8, right - left + 3, 2)
+    .fill(dark)
+    .moveTo(left, bottom)
+    .lineTo(right, top - 16)
+    .stroke({ width: 2, color: dark });
+  // A sign by the road.
+  const signX = site.x + site.width / 2 - 6;
+  frame
+    .rect(signX + 5, site.y + site.height - 10, 2, 8)
+    .fill(dark)
+    .rect(signX, site.y + site.height - 16, 12, 7)
+    .fill(0xd9a86a)
+    .stroke({ width: 1, color: dark });
+  view.addChild(frame);
+  return view;
+}
 
 function matrixFilter(matrix: ColourMatrix): ColorMatrixFilter {
   const filter = new ColorMatrixFilter();
@@ -235,7 +317,7 @@ interface Scene {
   /** Buildings, villagers, trees and rocks, depth-sorted by `zIndex` (their bottom edge). */
   objectsHost: Container;
   /** The standing things in `objectsHost` that aren't villagers - swapped out together. */
-  statics: Sprite[];
+  statics: Container[];
   /** Every villager on this map, by id; they stay put across rebuilds so they can walk. */
   walkers: Map<string, Walker>;
   /** Whether the pointer is mid-drag, so a drag ending on a building isn't taken as a click. */
@@ -248,7 +330,10 @@ interface Scene {
  * doesn't redraw the village.
  */
 function contentsKey(data: VillageFacts, map: MapId): string {
-  return `${map}|${data.builtBuildingIds.join(',')}`;
+  const sites = data.constructionSites
+    .map((site) => `${site.buildingId}:${site.slot}:${site.daysLeft}`)
+    .join(',');
+  return `${map}|${data.builtBuildingIds.join(',')}|${sites}`;
 }
 
 /** Who's where on the map, as a string: villagers only set off when it changes. */
@@ -280,6 +365,7 @@ export function VillageCanvas({
   pace = 1,
   follow = null,
   onStopFollowing,
+  highlight = null,
 }: VillageCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const zoomByRef = useRef<((step: number) => void) | null>(null);
@@ -777,8 +863,51 @@ export function VillageCanvas({
         );
       }
 
-      const objects: Sprite[] = [];
+      const objects: Container[] = [];
+      const buildingEvents = (view: Container, buildingId: string, slot: number) => {
+        view.eventMode = 'static';
+        view.cursor = 'pointer';
+        view.on('pointerover', () => {
+          setHovered({ kind: 'building', id: buildingId, slot });
+        });
+        view.on('pointerout', () => {
+          setHovered((now) => (now?.id === buildingId ? null : now));
+        });
+        view.on('pointertap', () => {
+          if (!current.isDragging()) {
+            onClickRef.current?.(buildingId, slot);
+          }
+        });
+      };
+
+      // Fields lie flat over their whole plot, under anyone walking by.
+      const stage = cropStage(season.season);
+      for (const building of plan.buildings) {
+        if (building.buildingId !== 'fields') {
+          continue;
+        }
+        const field = await drawField(building.footprint, stage);
+        buildingEvents(field, building.buildingId, building.slot);
+        flat.addChild(field);
+      }
+
+      // Building sites: scaffolding on a cleared plot.
+      for (const site of plan.sites) {
+        const view = drawSite(site);
+        view.eventMode = 'static';
+        view.on('pointerover', () => {
+          setHovered({ kind: 'site', id: site.buildingId, daysLeft: site.daysLeft });
+        });
+        view.on('pointerout', () => {
+          setHovered((now) => (now?.kind === 'site' ? null : now));
+        });
+        objects.push(view);
+      }
+
       for (const item of plan.standing) {
+        if (item.kind === 'building' && item.buildingId === 'fields') {
+          continue;
+        }
         let texture = await loadFrameTexture(item.sprite);
         if (item.kind === 'decor' && season.foliage && isFoliage(item.sprite)) {
           texture = recoloured(
@@ -796,28 +925,15 @@ export function VillageCanvas({
           zIndex: item.y + item.sprite.height,
         });
         if (item.kind === 'building') {
-          const { buildingId, slot } = item;
-          sprite.eventMode = 'static';
-          sprite.cursor = 'pointer';
-          sprite.on('pointerover', () => {
-            setHovered({ kind: 'building', id: buildingId, slot });
-          });
-          sprite.on('pointerout', () => {
-            setHovered((now) => (now?.id === buildingId ? null : now));
-          });
-          sprite.on('pointertap', () => {
-            if (!current.isDragging()) {
-              onClickRef.current?.(buildingId, slot);
-            }
-          });
+          buildingEvents(sprite, item.buildingId, item.slot);
         }
         objects.push(sprite);
       }
 
       if (cancelled.current) {
         flat.destroy({ children: true });
-        for (const sprite of objects) {
-          sprite.destroy();
+        for (const view of objects) {
+          view.destroy({ children: true });
         }
         return;
       }
@@ -826,7 +942,7 @@ export function VillageCanvas({
       }
       for (const old of current.statics) {
         current.objectsHost.removeChild(old);
-        old.destroy();
+        old.destroy({ children: true });
       }
       current.flatHost.addChild(flat);
       current.atmosphere.setGlows(glowsFor(plan.buildings));
@@ -842,6 +958,22 @@ export function VillageCanvas({
       cancelled.current = true;
     };
   }, [scene, plan, season]);
+
+  // The Build panel's plot, outlined on the map.
+  useEffect(() => {
+    if (!scene || !highlight || highlight.map !== map) {
+      return;
+    }
+    const outline = new Graphics()
+      .rect(highlight.x, highlight.y, highlight.width, highlight.height)
+      .fill({ color: 0xfff6dc, alpha: 0.18 })
+      .stroke({ width: 2, color: 0xfff6dc, alpha: 0.9 });
+    scene.world.addChild(outline);
+    return () => {
+      scene.world.removeChild(outline);
+      outline.destroy();
+    };
+  }, [scene, highlight, map]);
 
   // The day's festival, if there is one, on this map.
   useEffect(() => {
@@ -1116,11 +1248,13 @@ export function VillageCanvas({
         <div className="wood-panel pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 px-1 text-lg whitespace-nowrap">
           {hovered.kind === 'building'
             ? buildingLabel(data, hovered.id, hovered.slot)
-            : hovered.kind === 'animal'
-              ? `${hovered.label}, ${hovered.where}`
-              : hovered.kind === 'furniture'
-                ? `${titleCase(hovered.id)} - click to look`
-                : `${titleCase(hovered.id)}, ${hovered.where} - click to meet them`}
+            : hovered.kind === 'site'
+              ? `${titleCase(hovered.id)} - being built, ${hovered.daysLeft} ${hovered.daysLeft === 1 ? 'day' : 'days'} left`
+              : hovered.kind === 'animal'
+                ? `${hovered.label}, ${hovered.where}`
+                : hovered.kind === 'furniture'
+                  ? `${titleCase(hovered.id)} - click to look`
+                  : `${titleCase(hovered.id)}, ${hovered.where} - click to meet them`}
         </div>
       )}
       {/*

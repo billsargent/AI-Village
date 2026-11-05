@@ -32,6 +32,7 @@ const FACTS: VillageFacts = {
     { name: 'Lantern Night', season: 'winter', seasonDay: 14 },
   ],
   boardPosts: [{ author: 'owner', text: 'Well done, all.', postedDay: 0 }],
+  constructionSites: [],
 };
 
 describe('buildGazette', () => {

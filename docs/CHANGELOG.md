@@ -406,3 +406,21 @@
 - At night a Zzz rises from homes with sleepers, and hovering over one
   tells you what each sleeper dreams of (#201).
 - Three white hens peck about the first field once there are fields (#202).
+- The owner can build: a Build panel (the top bar, B, or the palette) lists
+  every building with its cost, time and what stands in the way. Hovering
+  over one outlines its plot on the map, and Build starts it (#204).
+- Construction takes the building's build days: it goes up as a site with
+  scaffolding, the chronicle notes the start and the finish, villagers know
+  what's being built, and sites are saved (a `finishes_on_day` column,
+  migration 0013) (#205).
+- Fields are drawn over their whole plot: fenced, tilled soil with crop
+  rows that sprout in spring, grow green in summer, turn gold in autumn
+  and lie bare in winter (#206).
+- Rooms for the bakery, mill, workshop, smithy, smokehouse and chapel, with
+  a few more pieces from the interior sheet: a long table, stools, blue
+  chairs and clock cabinets (#207).
+- Important news pops up in the corner as it happens (#208).
+- A Villagers page (the top bar, V, or the palette): everyone's trade,
+  whereabouts, mood and traits at a glance (#209).
+- This month's model spend against the monthly ceiling, under the
+  clock (#210).
