@@ -105,3 +105,19 @@ body {
     display: none;
   }
 }
+
+/* The village cheers: paper falling and turning. */
+@keyframes confetti-fall {
+  from {
+    transform: translateY(0) rotate(0deg);
+  }
+  to {
+    transform: translateY(105vh) rotate(720deg);
+  }
+}
+
+.confetti {
+  animation-name: confetti-fall;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}

@@ -461,6 +461,27 @@ describe('apply ThankVillager', () => {
   });
 });
 
+describe('apply FinishFocusSession', () => {
+  it('cheers: everyone has a little more fun, and the chronicle notes it', () => {
+    const village = villageWithTwo();
+    const before = village.villagerNeeds['ada']?.fun ?? 0;
+    const { state, events } = apply(village, { kind: 'FinishFocusSession', minutes: 50 });
+    expect(state.villagerNeeds['ada']?.fun).toBe(Math.min(100, before + 5));
+    expect(state.chronicle.at(-1)).toMatchObject({
+      kind: 'work-along',
+      text: 'The owner finished 50 minutes of focused work, and the village cheered.',
+      public: true,
+    });
+    expect(events).toEqual([{ kind: 'FocusSessionFinished', minutes: 50 }]);
+  });
+
+  it('only counts the three lengths there are', () => {
+    expect(() => apply(villageWithTwo(), { kind: 'FinishFocusSession', minutes: 3 })).toThrow(
+      CommandError,
+    );
+  });
+});
+
 describe('apply OwnerPostOnBoard', () => {
   it("pins the owner's note, signed by the owner, with a chronicle line", () => {
     const village = villageWithTwo();

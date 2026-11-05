@@ -2,6 +2,9 @@ import {
   BACK_WALL,
   CAT_FRAMES,
   catSpot,
+  CHICKEN_FRAMES,
+  chickenSpots,
+  dreamFor,
   FLOORBOARDS,
   getBuilding,
   GRASS_TILE,
@@ -38,6 +41,8 @@ import {
 import { AtmosphereLayer, type AtmosphereState } from './atmosphere-layer.js';
 import { indoorLightAt, lightAt, lightWord } from './light.js';
 import { buildingSummary, whoIsIn } from './building-card.js';
+import { FestivalLayer } from './festival-layer.js';
+import { TalkLayer } from './talk-layer.js';
 import { loadFrameTexture } from './load-frame-texture.js';
 import { Minimap, type MinimapView } from './Minimap.js';
 import { clampZoom, DEFAULT_ZOOM, stepZoom, zoomLevels } from './zoom.js';
@@ -127,11 +132,17 @@ export interface VillageCanvasProps {
   onStopFollowing?: (() => void) | undefined;
 }
 
-/** Something that walks the map: a villager, or the cat. */
+/** Something that walks the map: a villager, or one of the animals. */
 interface Mover {
   id: string;
-  kind: 'villager' | 'cat';
+  kind: 'villager' | 'animal';
   sprite: SpriteFrame;
+  /** An animal's idle frames, swapped in turn. */
+  frames?: readonly SpriteFrame[];
+  /** Where the sprite sits against its tile, for sprites that aren't 16px. */
+  offset?: { x: number; y: number };
+  /** An animal's hover label: "The village cat", "A hen". */
+  label?: string;
   /** Tile coordinates. */
   x: number;
   y: number;
@@ -141,16 +152,17 @@ interface Mover {
 
 /** The cat stands as a villager would on its tile, its wider sprite centred. */
 const CAT_OFFSET = { x: -3, y: -1 };
-/** How long each of the cat's two idle frames shows. */
-const CAT_FRAME_MS = 900;
+/** How long each of an animal's idle frames shows. */
+const ANIMAL_FRAME_MS = 900;
 
 /** One villager's sprite on the map, and where their walk has got to. */
 interface Walker {
-  kind: 'villager' | 'cat';
+  kind: 'villager' | 'animal';
   sprite: Sprite;
   state: WalkerState;
-  /** For the cat: its idle frames, swapped in turn. */
+  /** For an animal: its idle frames, swapped in turn. */
   frames?: readonly Texture[];
+  offset: { x: number; y: number };
   /** Read by the sprite's hover handler, so it always shows the latest. */
   where: string;
 }
@@ -158,7 +170,7 @@ interface Walker {
 /** What the pointer is over, for the label under the map. */
 type Hovered =
   | { kind: 'building'; id: string; slot: number }
-  | { kind: 'cat'; id: 'cat'; where: string }
+  | { kind: 'animal'; id: string; label: string; where: string }
   | { kind: 'villager'; id: string; where: string }
   | { kind: 'furniture'; id: FurnitureKind };
 
@@ -206,6 +218,8 @@ function prefersReducedMotion(): boolean {
 /** A live scene for one map: the renderer, and the two layers the village's contents are drawn into. */
 interface Scene {
   app: Application;
+  /** The day's festival decorations, if it's a festival. */
+  festival: FestivalLayer;
   /** The grass, roads and flat decor: what winter's snow covers. */
   groundGroup: Container;
   /** Season-recoloured copies of tree and bush textures, by season and texture. */
@@ -330,7 +344,8 @@ export function VillageCanvas({
   const planRef = useRef(plan);
   planRef.current = plan;
   const whoKey = villagersKey(data, map);
-  const catKey = `${data.year}-${data.season}-${data.seasonDay}|${data.hour}`;
+  const dayKey = `${data.year}-${data.season}-${data.seasonDay}`;
+  const animalsKey = `${dayKey}|${data.hour}|${Math.floor(data.minuteOfHour / 15)}`;
   const movers = useMemo((): readonly Mover[] => {
     const current = dataRef.current;
     const villagers: Mover[] = villagersOnMap(current, map).map((placement) => ({
@@ -345,28 +360,67 @@ export function VillageCanvas({
     if (map !== 'main') {
       return villagers;
     }
-    const cat = catSpot(
-      `${current.year}-${current.season}-${current.seasonDay}`,
-      current.hour,
-      current.builtBuildingIds,
-    );
+    const day = `${current.year}-${current.season}-${current.seasonDay}`;
+    const animals: Mover[] = [];
+    const cat = catSpot(day, current.hour, current.builtBuildingIds);
     const catFrame = CAT_FRAMES[0];
-    return catFrame
-      ? [
-          ...villagers,
-          {
-            id: 'cat',
-            kind: 'cat',
-            sprite: catFrame,
-            x: cat.x,
-            y: cat.y,
-            hidden: false,
-            where: cat.where,
-          },
-        ]
-      : villagers;
-  }, [whoKey, catKey, map]);
+    if (catFrame) {
+      animals.push({
+        id: 'cat',
+        kind: 'animal',
+        sprite: catFrame,
+        frames: CAT_FRAMES,
+        offset: CAT_OFFSET,
+        label: 'The village cat',
+        x: cat.x,
+        y: cat.y,
+        hidden: false,
+        where: cat.where,
+      });
+    }
+    const henFrame = CHICKEN_FRAMES[0];
+    for (const hen of chickenSpots(
+      day,
+      current.hour,
+      current.minuteOfHour,
+      current.builtBuildingIds,
+    )) {
+      if (henFrame) {
+        animals.push({
+          id: hen.id,
+          kind: 'animal',
+          sprite: henFrame,
+          frames: CHICKEN_FRAMES,
+          label: 'A hen',
+          x: hen.x,
+          y: hen.y,
+          hidden: false,
+          where: hen.where,
+        });
+      }
+    }
+    return [...villagers, ...animals];
+  }, [whoKey, animalsKey, map]);
   const grid = useMemo(() => walkGrid(map, dataRef.current.builtBuildingIds), [key, map]);
+
+  // For the talk layer: what to say, and whose roofs the Zzz rise from.
+  const asleep = data.phase === 'night';
+  const sleepers = useMemo(
+    () =>
+      asleep
+        ? plan.buildings
+            .filter((b) => villagersInside(dataRef.current, b.buildingId, b.slot).length > 0)
+            .map((b) => ({ x: b.x + b.sprite.width / 2, y: b.y + 8 }))
+        : [],
+    [asleep, plan, whoKey],
+  );
+  const talkRef = useRef({
+    hour: data.hour,
+    weather: data.weather,
+    festival: data.festival,
+    sleepers,
+  });
+  talkRef.current = { hour: data.hour, weather: data.weather, festival: data.festival, sleepers };
   const roomBuildingId = room?.buildingId ?? null;
   const roomSlot = room?.slot;
   const occupants = useMemo(
@@ -601,6 +655,14 @@ export function VillageCanvas({
         app?.renderer.off('resize', fitAtmosphere);
         atmosphere.destroy();
       });
+      const festival = new FestivalLayer();
+      world.addChild(festival.decor);
+      const talk = new TalkLayer();
+      app.stage.addChild(festival.lights, talk.view);
+      cleanups.push(() => {
+        festival.destroy();
+        talk.destroy();
+      });
       const walkers = new Map<string, Walker>();
       const recolouredTextures = new Map<string, Texture>();
       cleanups.push(() => {
@@ -628,21 +690,35 @@ export function VillageCanvas({
         for (const walker of walkers.values()) {
           walker.state = stepWalker(walker.state, walkMs, reducedMotion);
           const at = walkerPosition(walker.state, reducedMotion);
-          const offset = walker.kind === 'cat' ? CAT_OFFSET : { x: 0, y: 0 };
           walker.sprite.position.set(
-            Math.round(at.x * TILE_PX) + offset.x,
-            Math.round(at.y * TILE_PX) + offset.y,
+            Math.round(at.x * TILE_PX) + walker.offset.x,
+            Math.round(at.y * TILE_PX) + walker.offset.y,
           );
           walker.sprite.zIndex = walker.sprite.y + walker.sprite.height;
           walker.sprite.alpha = walker.state.alpha;
           walker.sprite.visible = walker.state.visible;
           if (walker.frames && !reducedMotion) {
-            const frame = walker.frames[Math.floor(idleMs / CAT_FRAME_MS) % walker.frames.length];
+            const frame =
+              walker.frames[Math.floor(idleMs / ANIMAL_FRAME_MS) % walker.frames.length];
             if (frame && walker.sprite.texture !== frame) {
               walker.sprite.texture = frame;
             }
           }
         }
+        festival.update(ticker.deltaMS, atmosphereRef.current.glow, world, reducedMotion);
+        const talkers = [...walkers.entries()]
+          .filter(([, walker]) => walker.kind === 'villager')
+          .map(([id, walker]) => ({
+            id,
+            x: walker.sprite.x,
+            y: walker.sprite.y,
+            present: walker.state.visible && walker.state.alpha >= 1,
+          }));
+        talk.update(ticker.deltaMS, talkers, world, {
+          ...talkRef.current,
+          inside: insideRef.current,
+          reducedMotion,
+        });
         // Following someone: keep them in the middle of the screen.
         const followed = followRef.current ? walkers.get(followRef.current) : undefined;
         if (followed && !insideRef.current) {
@@ -654,6 +730,7 @@ export function VillageCanvas({
 
       setScene({
         app,
+        festival,
         groundGroup,
         recoloured: recolouredTextures,
         atmosphere,
@@ -766,6 +843,11 @@ export function VillageCanvas({
     };
   }, [scene, plan, season]);
 
+  // The day's festival, if there is one, on this map.
+  useEffect(() => {
+    scene?.festival.setFestival(data.festival, map);
+  }, [scene, data.festival, map]);
+
   // The season's ground: autumn's gold over the grass, winter's snow over grass and paths.
   useEffect(() => {
     if (!scene) {
@@ -796,10 +878,9 @@ export function VillageCanvas({
           continue;
         }
         const texture = await loadFrameTexture(placement.sprite);
-        const frames =
-          placement.kind === 'cat'
-            ? await Promise.all(CAT_FRAMES.map((frame) => loadFrameTexture(frame)))
-            : undefined;
+        const frames = placement.frames
+          ? await Promise.all(placement.frames.map((frame) => loadFrameTexture(frame)))
+          : undefined;
         // Set by the cleanup below, across the await.
         if (cancelled.current) {
           return;
@@ -819,15 +900,17 @@ export function VillageCanvas({
           sprite,
           state,
           where: placement.where,
+          offset: placement.offset ?? { x: 0, y: 0 },
           ...(frames ? { frames } : {}),
         };
-        if (placement.kind === 'cat') {
-          // The cat can be looked at, but it's nobody's to inspect.
+        if (placement.kind === 'animal') {
+          // Animals can be looked at, but they're nobody's to inspect.
+          const label = placement.label ?? 'An animal';
           sprite.on('pointerover', () => {
-            setHovered({ kind: 'cat', id: 'cat', where: walker.where });
+            setHovered({ kind: 'animal', id, label, where: walker.where });
           });
           sprite.on('pointerout', () => {
-            setHovered((now) => (now?.kind === 'cat' ? null : now));
+            setHovered((now) => (now?.id === id ? null : now));
           });
           current.objectsHost.addChild(sprite);
           current.walkers.set(id, walker);
@@ -1033,8 +1116,8 @@ export function VillageCanvas({
         <div className="wood-panel pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 px-1 text-lg whitespace-nowrap">
           {hovered.kind === 'building'
             ? buildingLabel(data, hovered.id, hovered.slot)
-            : hovered.kind === 'cat'
-              ? `The village cat, ${hovered.where}`
+            : hovered.kind === 'animal'
+              ? `${hovered.label}, ${hovered.where}`
               : hovered.kind === 'furniture'
                 ? `${titleCase(hovered.id)} - click to look`
                 : `${titleCase(hovered.id)}, ${hovered.where} - click to meet them`}
@@ -1127,5 +1210,15 @@ export function VillageCanvas({
 function buildingLabel(data: VillageFacts, buildingId: string, slot: number): string {
   const summary = buildingSummary(data, buildingId, slot);
   const who = whoIsIn(buildingId, summary.inside);
-  return `${summary.title}${who ? ` - ${who}` : ''} - click to look`;
+  // Spec section 15: "Sleeping villagers show a one-line dream."
+  const dreams =
+    data.phase === 'night' && summary.inside.length > 0
+      ? ` - ${summary.inside
+          .map(
+            (villager) =>
+              `${titleCase(villager.id)} ${dreamFor(villager.id, villager.tradeId, data.season, `${data.year}-${data.season}-${data.seasonDay}`)}`,
+          )
+          .join('; ')}`
+      : '';
+  return `${summary.title}${who ? ` - ${who}` : ''}${dreams} - click to look`;
 }

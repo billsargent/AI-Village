@@ -411,6 +411,17 @@ export function useThankVillager() {
   });
 }
 
+/** Spec section 15's work-along: a finished focus session, for the chronicle. */
+export function useFinishFocusSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (minutes: number) => postJson('/api/work-along', { minutes }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['village'] });
+    },
+  });
+}
+
 /** The owner pins a note on the notice board. */
 export function usePinNote() {
   const queryClient = useQueryClient();

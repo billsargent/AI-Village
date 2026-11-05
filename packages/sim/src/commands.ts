@@ -36,6 +36,7 @@ export type Command =
   | { kind: 'DeclineOrder'; orderId: number }
   | { kind: 'PostOnBoard'; author: string; text: string }
   | { kind: 'OwnerPostOnBoard'; text: string }
+  | { kind: 'FinishFocusSession'; minutes: number }
   | { kind: 'CallVote'; topic: string; options: readonly string[] }
   | { kind: 'Remember'; villagerId: string; text: string; importance: number; about?: string }
   | { kind: 'MakePromise'; villagerId: string; text: string; dueInDays: number }
@@ -68,6 +69,7 @@ export type DomainEvent =
       decision: Extract<PromiseStatus, 'kept' | 'released'>;
     }
   | { kind: 'VillagerThanked'; villagerId: string; memoryId: number }
+  | { kind: 'FocusSessionFinished'; minutes: number }
   | { kind: 'WorkRequested'; requestId: number }
   | { kind: 'VillagerHired'; villagerId: string; tradeId: string };
 
@@ -93,6 +95,8 @@ export function apply(state: VillageState, command: Command): CommandResult {
       return applyPostOnBoard(state, command);
     case 'OwnerPostOnBoard':
       return applyOwnerPostOnBoard(state, command);
+    case 'FinishFocusSession':
+      return applyFinishFocusSession(state, command);
     case 'CallVote':
       return applyCallVote(state, command);
     case 'Remember':
@@ -481,6 +485,39 @@ function applyOwnerPostOnBoard(state: VillageState, command: { text: string }): 
   return {
     state: { ...state, board, chronicle },
     events: [{ kind: 'PostedOnBoard', postId }],
+  };
+}
+
+/** Spec section 15's work-along lengths, in real minutes. */
+export const FOCUS_SESSION_MINUTES: readonly number[] = [25, 50, 90];
+/** How much everyone's fun lifts when the owner finishes a stretch of work. */
+const FOCUS_CHEER_FUN = 5;
+
+/**
+ * Spec section 15's work-along: "At the end the village cheers, and the
+ * chronicle notes a long stretch of work." Everyone's fun lifts a little.
+ */
+function applyFinishFocusSession(state: VillageState, command: { minutes: number }): CommandResult {
+  if (!FOCUS_SESSION_MINUTES.includes(command.minutes)) {
+    throw new CommandError(`A focus session is 25, 50 or 90 minutes, not ${command.minutes}`);
+  }
+  const villagerNeeds = Object.fromEntries(
+    Object.entries(state.villagerNeeds).map(([id, needs]) => [
+      id,
+      { ...needs, fun: Math.min(MAX_NEED, needs.fun + FOCUS_CHEER_FUN) },
+    ]),
+  );
+  const chronicle = appendChronicle(state.chronicle, {
+    minute: state.clock.minute,
+    kind: 'work-along',
+    text: `The owner finished ${command.minutes} minutes of focused work, and the village cheered.`,
+    actors: [],
+    importance: 2,
+    public: true,
+  });
+  return {
+    state: { ...state, villagerNeeds, chronicle },
+    events: [{ kind: 'FocusSessionFinished', minutes: command.minutes }],
   };
 }
 
