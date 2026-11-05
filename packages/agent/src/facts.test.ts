@@ -1,4 +1,5 @@
 import {
+  apply,
   createVillage,
   FESTIVALS,
   recordMovement,
@@ -131,5 +132,33 @@ describe('renderFacts', () => {
     const text = renderFacts(facts(village, 'owner', 'chat'));
     expect(text).toContain('hesper (mayor)');
     expect(text).toContain('ada (farmer)');
+  });
+});
+
+describe('the notice board in the facts', () => {
+  it('carries the newest posts, newest first, and puts them in the facts block', () => {
+    let state = createVillage(1, {
+      villagers: [
+        { villagerId: 'hesper', tradeId: 'mayor', skillLevel: 1, hasTool: false, moodFactor: 1 },
+      ],
+    });
+    for (const text of ['one', 'two', 'three', 'four', 'five', 'six']) {
+      state = apply(state, { kind: 'PostOnBoard', author: 'hesper', text }).state;
+    }
+    const snapshot = facts(state, 'owner', 'chat');
+    expect(snapshot.boardPosts.map((post) => post.text)).toEqual([
+      'six',
+      'five',
+      'four',
+      'three',
+      'two',
+    ]);
+    expect(renderFacts(snapshot)).toContain('On the notice board: hesper: "six"; hesper: "five"');
+  });
+
+  it('leaves the board line out when nothing is pinned up', () => {
+    const snapshot = facts(createVillage(1, {}), 'owner', 'chat');
+    expect(snapshot.boardPosts).toEqual([]);
+    expect(renderFacts(snapshot)).not.toContain('notice board');
   });
 });

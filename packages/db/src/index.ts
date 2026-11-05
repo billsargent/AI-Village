@@ -9,3 +9,4 @@ export * from './village-repository.js';
 export * from './settings-repository.js';
 export * from './approvals-repository.js';
 export * from './meter-repository.js';
+export * from './chat-repository.js';

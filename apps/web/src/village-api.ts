@@ -49,6 +49,8 @@ export interface VillageFacts {
   treasuryDeltaYesterday: number;
   recentChronicle: readonly ChronicleEntry[];
   festivals: readonly Festival[];
+  /** The newest notes on the notice board, newest first. */
+  boardPosts: readonly { author: string; text: string; postedDay: number }[];
 }
 
 async function fetchVillageFacts(): Promise<VillageFacts> {
@@ -216,7 +218,7 @@ export interface SettingsStatus {
   /** What model calls have cost over the last 30 days. */
   spentThisMonthUsd: number;
   /** The Mayor's most recent attempt, if any since the server started. */
-  mayorLastTurn: { at: number; outcome: string } | null;
+  mayorLastTurn: { at: number; outcome: string; reply?: string } | null;
 }
 
 export interface SettingsChanges {
@@ -372,7 +374,7 @@ export interface VillagerCard {
     familiarity: number;
   }[];
   memories: readonly { text: string; about: string | null }[];
-  promises: readonly { text: string; daysLeft: number }[];
+  promises: readonly { id: number; text: string; daysLeft: number }[];
 }
 
 async function fetchVillagerCard(villagerId: string): Promise<VillagerCard> {
@@ -381,6 +383,45 @@ async function fetchVillagerCard(villagerId: string): Promise<VillagerCard> {
     throw new Error(`GET villager failed: ${response.status}`);
   }
   return (await response.json()) as VillagerCard;
+}
+
+async function postJson(path: string, body?: unknown): Promise<unknown> {
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body ?? {}),
+  });
+  if (!response.ok) {
+    const error = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(error?.error ?? `POST ${path} failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+/** Spec section 15's one-click thanks: their mood lifts, and they remember it. */
+export function useThankVillager() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (villagerId: string) =>
+      postJson(`/api/villagers/${encodeURIComponent(villagerId)}/thank`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['villager'] });
+      void queryClient.invalidateQueries({ queryKey: ['village'] });
+    },
+  });
+}
+
+/** Marks a promise kept, or lets the villager off it. */
+export function useDecidePromise() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { promiseId: number; decision: 'kept' | 'released' }) =>
+      postJson(`/api/promises/${input.promiseId}`, { decision: input.decision }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['villager'] });
+      void queryClient.invalidateQueries({ queryKey: ['village'] });
+    },
+  });
 }
 
 /** Kept current by the live updates, which refetch it as the village changes. */

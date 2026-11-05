@@ -57,7 +57,9 @@ describe('villagerCard', () => {
     expect(card?.memories).toEqual([
       { text: "The owner's favourite food is plum jam", about: 'owner' },
     ]);
-    expect(card?.promises).toEqual([{ text: 'Save the first plums for the owner', daysLeft: 3 }]);
+    expect(card?.promises).toEqual([
+      { id: 1, text: 'Save the first plums for the owner', daysLeft: 3 },
+    ]);
     expect(villagerCard(state, 'tobin')?.memories).toEqual([]);
   });
 

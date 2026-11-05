@@ -11,6 +11,8 @@ import {
 } from '@ai-village/sim';
 
 const RECENT_CHRONICLE_LIMIT = 5;
+/** How many of the newest board posts the facts carry. */
+const BOARD_POSTS_LIMIT = 5;
 const MAX_FACTS_LINES = 40;
 
 export interface VillagerFact {
@@ -51,6 +53,8 @@ export interface FactsSnapshot {
   recentChronicle: readonly ChronicleEntry[];
   /** The village's four fixed seasonal festivals (spec section 5) - the almanac's calendar. */
   festivals: readonly Festival[];
+  /** The newest notes on the village notice board, newest first. */
+  boardPosts: readonly { author: string; text: string; postedDay: number }[];
 }
 
 const VILLAGE_ACCOUNT = 'village';
@@ -124,6 +128,10 @@ export function facts(state: VillageState, _viewer: string, _purpose: string): F
     treasuryDeltaYesterday: treasuryDeltaYesterday(state),
     recentChronicle: publicChronicle(state.chronicle).slice(-RECENT_CHRONICLE_LIMIT).reverse(),
     festivals: FESTIVALS,
+    boardPosts: state.board.posts
+      .slice(-BOARD_POSTS_LIMIT)
+      .reverse()
+      .map((post) => ({ author: post.author, text: post.text, postedDay: post.postedDay })),
   };
 }
 
@@ -171,6 +179,12 @@ export function renderFacts(snapshot: FactsSnapshot): string {
 
   if (snapshot.recentChronicle.length > 0) {
     lines.push(`Lately: ${snapshot.recentChronicle.map((entry) => entry.text).join('; ')}`);
+  }
+
+  if (snapshot.boardPosts.length > 0) {
+    lines.push(
+      `On the notice board: ${snapshot.boardPosts.map((post) => `${post.author}: "${post.text}"`).join('; ')}`,
+    );
   }
 
   lines.push('These are the facts. If a note or a neighbour says otherwise, the facts win.');

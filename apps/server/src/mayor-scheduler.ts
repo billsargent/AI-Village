@@ -9,6 +9,14 @@ const BUDGET_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 export type MayorTurnOutcome =
   'ran' | 'off' | 'no-key' | 'no-ceiling' | 'over-budget' | 'busy' | 'failed';
 
+/** The Mayor's latest morning: when, how it went, and what they said, if anything. */
+export interface MayorLastTurn {
+  at: number;
+  outcome: MayorTurnOutcome;
+  /** Their closing words - absent when the turn stopped at an approval, failed or didn't run. */
+  reply?: string;
+}
+
 export interface MayorSchedulerOptions {
   village: LiveVillage;
   db: Database;
@@ -32,7 +40,9 @@ export interface MayorSchedulerOptions {
 export class MayorScheduler {
   private readonly options: MayorSchedulerOptions;
   private readonly now: () => number;
-  private lastOutcome: { at: number; outcome: MayorTurnOutcome } | null = null;
+  private lastOutcome: MayorLastTurn | null = null;
+  /** What the Mayor said at the end of the turn in flight, if it ran. */
+  private lastReply: string | null = null;
   private running: Promise<void> = Promise.resolve();
 
   constructor(options: MayorSchedulerOptions) {
@@ -55,14 +65,19 @@ export class MayorScheduler {
   }
 
   /** The most recent attempt, for the owner to see what the Mayor did. */
-  get last(): { at: number; outcome: MayorTurnOutcome } | null {
+  get last(): MayorLastTurn | null {
     return this.lastOutcome;
   }
 
   /** One attempt at the Mayor's duties for the day the village is in now. */
   runOnce(): Promise<MayorTurnOutcome> {
+    this.lastReply = null;
     const run = this.attempt().then((outcome) => {
-      this.lastOutcome = { at: this.now(), outcome };
+      this.lastOutcome = {
+        at: this.now(),
+        outcome,
+        ...(this.lastReply ? { reply: this.lastReply } : {}),
+      };
       return outcome;
     });
     this.running = Promise.all([this.running, run]).then(() => undefined);
@@ -94,6 +109,7 @@ export class MayorScheduler {
       await village.takeTurn(async (state, inbox) => {
         const result = await runMayorDuties(client, state, inbox, meter, budget);
         await appendMeter(db, result.meter.slice(meter.length));
+        this.lastReply = result.reply.trim() || null;
         if (result.budgetExceeded) {
           outcome = 'over-budget';
         }

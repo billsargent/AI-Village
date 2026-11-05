@@ -509,6 +509,31 @@ describe("the Mayor's mornings", () => {
     expect(JSON.stringify(settings)).not.toContain('sk-test');
   });
 
+  it('keeps what the Mayor said at the end of their morning, for the owner to read', async () => {
+    const make = (): ModelClient => ({
+      chatCompletion: () =>
+        Promise.resolve({
+          text: 'All quiet - nothing needed doing this morning.',
+          usage: { promptTokens: 100, completionTokens: 10, totalTokens: 110 },
+        }),
+    });
+    const { app, village, mayor, clock } = await createLiveTestApp(undefined, fakeClock(), make);
+    await saveSettingsVia(app, {
+      deepseekApiKey: 'sk-test',
+      monthlyCeilingUsd: 1,
+      mayorAutonomy: true,
+    });
+
+    await reachNextMorning(village, clock);
+    await vi.waitFor(() => {
+      expect(mayor.last?.outcome).toBe('ran');
+    });
+    const settings = (await (await app.request('/api/settings')).json()) as {
+      mayorLastTurn: { outcome: string; reply?: string };
+    };
+    expect(settings.mayorLastTurn.reply).toBe('All quiet - nothing needed doing this morning.');
+  });
+
   it('stops at the monthly ceiling', async () => {
     const model = hiringModel();
     const { app, mayor } = await createLiveTestApp(undefined, fakeClock(), model.make);
@@ -650,6 +675,32 @@ describe('/api/villagers/:id/chat', () => {
     expect(settings.spentThisMonthUsd).toBeGreaterThan(0);
   });
 
+  it('keeps the conversation through a restart', async () => {
+    const model = talkingModel('Morning!');
+    const first = await createLiveTestApp(undefined, fakeClock(), model.make);
+    await post(first.app, '/api/settings', { deepseekApiKey: 'test-key' });
+    await post(first.app, '/api/villagers/ada/chat', { message: 'Hello Ada' });
+    await first.closeDb();
+
+    const second = await createLiveTestApp(first.dbPath, fakeClock(), model.make);
+    const history = (await (await second.app.request('/api/villagers/ada/chat')).json()) as {
+      lines: { from: string; text: string }[];
+    };
+    expect(history.lines.map((line) => [line.from, line.text])).toEqual([
+      ['owner', 'Hello Ada'],
+      ['villager', 'Morning!'],
+    ]);
+
+    // And the next turn is given what was said before the restart.
+    await post(second.app, '/api/villagers/ada/chat', { message: 'Still there?' });
+    const prompt = model.sent.at(-1) as { content: string }[];
+    expect(prompt.slice(-3).map((m) => m.content)).toEqual([
+      'Hello Ada',
+      'Morning!',
+      'Still there?',
+    ]);
+  });
+
   it('answers 502, and keeps no half a conversation, when the model call fails', async () => {
     const make = (): ModelClient => ({
       chatCompletion: () => Promise.reject(new Error('network down')),
@@ -691,5 +742,58 @@ describe('GET /api/villagers/:id', () => {
   it('is 404 for someone who does not live here', async () => {
     const { app } = await createTestApp();
     expect((await app.request('/api/villagers/nobody')).status).toBe(404);
+  });
+});
+
+describe("the owner's own actions", () => {
+  function postJson(
+    app: { request: (p: string, i?: RequestInit) => Response | Promise<Response> },
+    path: string,
+    body: object = {},
+  ) {
+    return app.request(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("thanking a villager lifts their fun, they remember it, and it's saved", async () => {
+    const { app, village } = await createLiveTestApp();
+    const before = village.state.villagerNeeds.ada?.fun ?? 0;
+    const response = await postJson(app, '/api/villagers/ada/thank');
+    expect(response.status).toBe(200);
+    const card = (await response.json()) as { memories: { text: string }[] };
+    expect(card.memories.map((m) => m.text)).toContain('The owner thanked me.');
+    expect(village.state.villagerNeeds.ada?.fun).toBeGreaterThanOrEqual(before);
+    expect((await postJson(app, '/api/villagers/nobody/thank')).status).toBe(404);
+  });
+
+  it('marks a promise kept once, and refuses to decide it twice', async () => {
+    const { app, village } = await createLiveTestApp();
+    await village.act({
+      kind: 'MakePromise',
+      villagerId: 'ada',
+      text: 'Mend the fence',
+      dueInDays: 2,
+    });
+    const card = (await (await app.request('/api/villagers/ada')).json()) as {
+      promises: { id: number; text: string }[];
+    };
+    const promiseId = card.promises[0]?.id ?? -1;
+
+    expect((await postJson(app, `/api/promises/${promiseId}`, { decision: 'kept' })).status).toBe(
+      200,
+    );
+    const after = (await (await app.request('/api/villagers/ada')).json()) as {
+      promises: unknown[];
+    };
+    expect(after.promises).toEqual([]);
+    expect((await postJson(app, `/api/promises/${promiseId}`, { decision: 'kept' })).status).toBe(
+      409,
+    );
+    expect((await postJson(app, `/api/promises/${promiseId}`, { decision: 'maybe' })).status).toBe(
+      400,
+    );
   });
 });

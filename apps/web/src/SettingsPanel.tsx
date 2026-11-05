@@ -168,6 +168,9 @@ function MayorSettings({ status }: { status: SettingsStatus }) {
         <p className="text-sm text-ink-soft">
           Last morning, the Mayor{' '}
           {OUTCOMES[status.mayorLastTurn.outcome] ?? status.mayorLastTurn.outcome}.
+          {status.mayorLastTurn.reply && (
+            <span className="mt-1 block text-ink">"{status.mayorLastTurn.reply}"</span>
+          )}
         </p>
       )}
       {save.isError && (

@@ -47,7 +47,7 @@ export interface VillagerCardData {
   /** Their top memories (recency x importance), most important first. */
   memories: readonly { text: string; about: string | null }[];
   /** Open promises, with how many days are left (negative once overdue). */
-  promises: readonly { text: string; daysLeft: number }[];
+  promises: readonly { id: number; text: string; daysLeft: number }[];
 }
 
 const TOP_RELATIONSHIPS = 5;
@@ -95,6 +95,7 @@ export function villagerCard(state: VillageState, villagerId: string): VillagerC
     promises: state.promises.promises
       .filter((promise) => promise.villagerId === villagerId && promise.status === 'open')
       .map((promise) => ({
+        id: promise.id,
         text: promise.text,
         daysLeft: Math.ceil((promise.dueMinute - nowMinute) / MINUTES_PER_DAY),
       })),

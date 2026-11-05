@@ -7,7 +7,9 @@ import {
   type ModelClient,
 } from '@ai-village/agent';
 import {
+  appendChatLines,
   appendMeter,
+  loadChatLines,
   closeDatabase,
   getSettings,
   loadMeterSince,
@@ -84,12 +86,13 @@ const updateSettingsSchema = z
 const BUDGET_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const setSpeedSchema = z.object({ speed: clockSpeedSchema });
 const decideSchema = z.object({ decision: z.enum(['approved', 'declined']) });
+const promiseDecisionSchema = z.object({ decision: z.enum(['kept', 'released']) });
 /** How many past decisions the inbox shows alongside what's pending. */
 const RECENT_DECISIONS = 10;
 /** A chat message from the owner: long enough for a real question, short enough to stay cheap. */
 const chatMessageSchema = z.object({ message: z.string().trim().min(1).max(1000) });
-/** How many lines of each villager's chat the server keeps (the prompt sends only the last 10). */
-const CHAT_LINES_KEPT = 50;
+/** How many lines of a chat the browser is shown and the turn is given (the prompt sends only the last 10). */
+const CHAT_LINES_SHOWN = 50;
 
 export interface CreateAppOptions {
   /** Overridable for tests, so each test instance gets its own SQLite file. */
@@ -189,11 +192,6 @@ export async function createApp(options: CreateAppOptions = {}) {
     }
   });
 
-  /**
-   * Each villager's chat with the owner, kept while the server runs. Not
-   * saved to the database yet: a restart starts every conversation fresh.
-   */
-  const chats = new Map<string, ChatLine[]>();
   const villagerExists = (id: string) =>
     village.state.villagers.some((villager) => villager.villagerId === id);
 
@@ -207,12 +205,40 @@ export async function createApp(options: CreateAppOptions = {}) {
     return c.json(card);
   });
 
-  app.get('/api/villagers/:id/chat', (c) => {
+  /** The conversation so far - saved, so it survives a restart. */
+  /** Spec section 15: "the owner can thank a villager with one click: their mood lifts, and they remember it." */
+  app.post('/api/villagers/:id/thank', async (c) => {
     const id = c.req.param('id');
     if (!villagerExists(id)) {
       return c.json({ error: `No villager "${id}"` }, 404);
     }
-    return c.json({ lines: chats.get(id) ?? [] });
+    await village.act({ kind: 'ThankVillager', villagerId: id });
+    return c.json(villagerCard(village.state, id));
+  });
+
+  /** The owner marks a villager's promise kept, or lets them off it: `{ decision: 'kept' | 'released' }`. */
+  app.post('/api/promises/:id', async (c) => {
+    const id = Number(c.req.param('id'));
+    const body: unknown = await c.req.json().catch(() => null);
+    const parsed = promiseDecisionSchema.safeParse(body);
+    if (!Number.isInteger(id) || !parsed.success) {
+      return c.json({ error: "decision must be 'kept' or 'released'" }, 400);
+    }
+    try {
+      await village.act({ kind: 'DecidePromise', promiseId: id, decision: parsed.data.decision });
+    } catch (error) {
+      // An unknown or already-decided promise: nothing changed.
+      return c.json({ error: error instanceof Error ? error.message : String(error) }, 409);
+    }
+    return c.json({ ok: true });
+  });
+
+  app.get('/api/villagers/:id/chat', async (c) => {
+    const id = c.req.param('id');
+    if (!villagerExists(id)) {
+      return c.json({ error: `No villager "${id}"` }, 404);
+    }
+    return c.json({ lines: await loadChatLines(db, id, CHAT_LINES_SHOWN) });
   });
 
   /**
@@ -236,7 +262,7 @@ export async function createApp(options: CreateAppOptions = {}) {
       return c.json({ error: 'Save a DeepSeek API key in Settings to chat' }, 400);
     }
 
-    const history = chats.get(id) ?? [];
+    const history: ChatLine[] = await loadChatLines(db, id, CHAT_LINES_SHOWN);
     const ownerLine: ChatLine = { from: 'owner', text: parsed.data.message, at: now() };
     const meter = await loadMeterSince(db, now() - BUDGET_WINDOW_MS);
     const client = (options.makeModelClient ?? ((apiKey) => createDeepSeekClient({ apiKey })))(
@@ -267,10 +293,9 @@ export async function createApp(options: CreateAppOptions = {}) {
       console.error('AI-Village: a chat turn failed', error);
       return c.json({ error: "Couldn't reach the model just now - try again in a moment." }, 502);
     }
-    const lines = [...history, ownerLine, ...(outcome.reply ? [outcome.reply] : [])].slice(
-      -CHAT_LINES_KEPT,
-    );
-    chats.set(id, lines);
+    const added = [ownerLine, ...(outcome.reply ? [outcome.reply] : [])];
+    await appendChatLines(db, id, added);
+    const lines = [...history, ...added].slice(-CHAT_LINES_SHOWN);
     return c.json({ lines, approvalRequested: outcome.approvalRequested });
   });
 
