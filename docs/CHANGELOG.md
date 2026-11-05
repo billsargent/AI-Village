@@ -367,3 +367,6 @@
   Nothing shows indoors, and nothing moves under reduced motion (#182).
 - Villagers walk at the clock's pace: they stop while it's paused, walk 1.6x
   as fast at 2x and 2.5x at 4x, and 20% slower in snow (#183).
+- Zoom out to the whole map: 1x, and on smaller screens one level further
+  that fits the entire map on screen. Closer in, zoom stays in whole steps
+  (#185).

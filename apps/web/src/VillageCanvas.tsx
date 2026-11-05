@@ -34,6 +34,7 @@ import {
 import { AtmosphereLayer, type AtmosphereState } from './atmosphere-layer.js';
 import { indoorLightAt, lightAt, lightWord } from './light.js';
 import { loadFrameTexture } from './load-frame-texture.js';
+import { clampZoom, DEFAULT_ZOOM, stepZoom, zoomLevels } from './zoom.js';
 import type { VillageFacts } from './village-api.js';
 import { planInteriorDraw, roomZoom } from './interior-draw.js';
 import { planCanvasDraw, villagersInside, villagersOnMap } from './village-draw.js';
@@ -49,9 +50,6 @@ import {
 const MAP_BACKGROUND = '#2f4f2f';
 const ROOM_SURROUND = '#16100b';
 
-/** Whole steps only, no smoothing (spec sections 8 and 10: "zooms in whole steps (2x, 3x, 4x)"). */
-const ZOOMS = [2, 3, 4] as const;
-const DEFAULT_ZOOM_INDEX = 1;
 /** How far one arrow/WASD press pans, in map pixels. */
 const PAN_STEP = 32;
 /** A pointer that moves further than this between down and up was a drag, not a click. */
@@ -61,7 +59,8 @@ interface Camera {
   /** The map pixel at the centre of the screen. */
   x: number;
   y: number;
-  zoomIndex: number;
+  /** One of `zoomLevels`: a whole step, or the whole-map fit. */
+  zoom: number;
 }
 
 /**
@@ -73,9 +72,9 @@ const cameras = new Map<MapId, Camera>();
 /** Where each map's camera starts: the main map opens between Civic Row and the green. */
 function homeCamera(map: MapId, width: number, height: number): Camera {
   if (map === 'main') {
-    return { x: 35 * 16, y: 12 * 16, zoomIndex: DEFAULT_ZOOM_INDEX };
+    return { x: 35 * 16, y: 12 * 16, zoom: DEFAULT_ZOOM };
   }
-  return { x: width / 2, y: height / 2, zoomIndex: DEFAULT_ZOOM_INDEX };
+  return { x: width / 2, y: height / 2, zoom: DEFAULT_ZOOM };
 }
 
 function isTyping(target: EventTarget | null): boolean {
@@ -356,7 +355,13 @@ export function VillageCanvas({
         if (!app) {
           return;
         }
-        const zoom = ZOOMS[camera.zoomIndex] ?? 3;
+        const levels = zoomLevels(app.screen.width, app.screen.height, width, height);
+        // Zoomed right out, stay fitted to the whole map as the window changes size.
+        if (camera.zoom < 1) {
+          camera.zoom = levels[0] ?? 1;
+        }
+        camera.zoom = clampZoom(levels, camera.zoom);
+        const zoom = camera.zoom;
         const viewW = app.screen.width / zoom;
         const viewH = app.screen.height / zoom;
         camera.x =
@@ -376,7 +381,14 @@ export function VillageCanvas({
       app.renderer.on('resize', applyCamera);
 
       zoomByRef.current = (step: number) => {
-        camera.zoomIndex = Math.min(Math.max(camera.zoomIndex + step, 0), ZOOMS.length - 1);
+        if (!app) {
+          return;
+        }
+        camera.zoom = stepZoom(
+          zoomLevels(app.screen.width, app.screen.height, width, height),
+          camera.zoom,
+          step,
+        );
         applyCamera();
       };
 
@@ -401,7 +413,7 @@ export function VillageCanvas({
         }
         dragged = true;
         canvas.style.cursor = 'grabbing';
-        const zoom = ZOOMS[camera.zoomIndex] ?? 3;
+        const zoom = camera.zoom;
         camera.x = drag.camX - dx / zoom;
         camera.y = drag.camY - dy / zoom;
         applyCamera();
@@ -512,7 +524,7 @@ export function VillageCanvas({
           ticker.deltaMS,
           {
             ...atmosphereRef.current,
-            zoom: ZOOMS[camera.zoomIndex] ?? 3,
+            zoom: Math.max(1, Math.round(camera.zoom)),
             reducedMotion,
           },
           world,
