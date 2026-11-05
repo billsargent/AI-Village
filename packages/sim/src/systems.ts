@@ -37,7 +37,13 @@ import { createPromisesState, type PromisesState } from './promises.js';
 import { runEveningInteractions, type Relationships } from './relationships.js';
 import { pickHappening, type StorytellerStyle } from './storyteller.js';
 import { chargeUpkeep, upkeepDue } from './upkeep.js';
-import { invalidTraitsReason, pickTraits } from './traits.js';
+import {
+  friendshipGrowthFor,
+  invalidTraitsReason,
+  pickTraits,
+  skipsStint,
+  workMultiplierFor,
+} from './traits.js';
 import { runStint, type WorkerAssignment } from './work.js';
 import { drawWeather, type WeatherDay } from './weather.js';
 import { createWorkRequestQueue, type WorkRequestQueue } from './work-requests.js';
@@ -284,6 +290,26 @@ export function settleDay(state: VillageState): { state: VillageState; report: D
       });
     }
     for (let stintIndex = 0; hasPlace && stintIndex < STINTS_PER_DAY; stintIndex++) {
+      if (
+        skipsStint(
+          villager.traits,
+          state.villageSeed,
+          villager.villagerId,
+          date.absoluteDay,
+          stintIndex,
+        )
+      ) {
+        // Spec section 7: "Lazy: Skips 1 stint in 5; naps". No work, no wage.
+        chronicle = appendChronicle(chronicle, {
+          minute: state.clock.minute,
+          kind: 'work-skip',
+          text: `${villager.villagerId} took a nap instead of a stint`,
+          actors: [villager.villagerId],
+          importance: 1,
+          public: false,
+        });
+        continue;
+      }
       const stint = runStint(
         ledger,
         { ...villager, moodFactor },
@@ -293,6 +319,7 @@ export function settleDay(state: VillageState): { state: VillageState; report: D
           villageSeed: state.villageSeed,
           season: date.season,
           weather: weather.kind,
+          traitMultiplier: workMultiplierFor(villager.traits, worksAt),
         },
       );
       ledger = stint.ledger;
@@ -403,11 +430,13 @@ export function settleDay(state: VillageState): { state: VillageState; report: D
 
   // social: an evening interaction for every pair of villagers
   const villagerIds = state.villagers.map((v) => v.villagerId);
+  const traitsById = new Map(state.villagers.map((v) => [v.villagerId, v.traits]));
   const relationships = runEveningInteractions(
     state.relationships,
     villagerIds,
     date.absoluteDay,
     state.villageSeed,
+    (id) => friendshipGrowthFor(traitsById.get(id) ?? []),
   );
 
   // happenings

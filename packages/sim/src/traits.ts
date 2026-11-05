@@ -4,9 +4,8 @@
  * "Flaws" setting that could allow them doesn't exist yet, so the
  * default rule is the only rule.
  *
- * Traits change how a villager talks (their prompt says so). Their
- * effects in the village - "Stints +15%", "Friendships grow 25% faster"
- * - aren't modelled yet.
+ * Traits change how a villager talks (their prompt says so), and some
+ * change what they do - see the effects at the end of this file.
  */
 
 import { getTrait, TRAITS } from '@ai-village/content';
@@ -68,4 +67,59 @@ export function invalidTraitsReason(traits: readonly string[]): string | null {
     return `At most ${MAX_FLAWS} flaw per villager`;
   }
   return null;
+}
+
+/*
+ * What traits do in the village (spec section 7's "Effect in the village"
+ * column). Only the effects the sim can honestly model yet are here:
+ * stint output, a lazy villager's skipped stints, and how fast
+ * friendships grow. The rest (visits, tool wear, rumours, votes, ...)
+ * wait for the systems they act on.
+ */
+
+/** Fields and gardens - where green thumbs help. */
+const GREEN_WORKPLACES: ReadonlySet<string> = new Set(['fields', 'gardens', 'cottage-garden']);
+
+/** "Hardworking: Stints +15%"; "Green-thumbed: Fields and gardens +15%". */
+export function workMultiplierFor(traits: readonly string[], worksAt: string | undefined): number {
+  let multiplier = 1;
+  if (traits.includes('hardworking')) {
+    multiplier *= 1.15;
+  }
+  if (traits.includes('green-thumbed') && worksAt !== undefined && GREEN_WORKPLACES.has(worksAt)) {
+    multiplier *= 1.15;
+  }
+  return multiplier;
+}
+
+/** "Lazy: Skips 1 stint in 5" - a seeded roll per villager, day and stint. */
+export function skipsStint(
+  traits: readonly string[],
+  villageSeed: number,
+  villagerId: string,
+  day: number,
+  stintIndex: number,
+): boolean {
+  if (!traits.includes('lazy')) {
+    return false;
+  }
+  const rng = seededRandom({
+    villageSeed,
+    day,
+    system: 'lazy',
+    entity: `${villagerId}:${stintIndex}`,
+  });
+  return rng() < 1 / 5;
+}
+
+/** "Cheerful: Friendships grow 25% faster"; "Grumpy: ... 25% slower". */
+export function friendshipGrowthFor(traits: readonly string[]): number {
+  let growth = 1;
+  if (traits.includes('cheerful')) {
+    growth *= 1.25;
+  }
+  if (traits.includes('grumpy')) {
+    growth *= 0.75;
+  }
+  return growth;
 }

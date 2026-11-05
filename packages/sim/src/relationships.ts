@@ -130,6 +130,8 @@ export function applyEveningInteraction(
   b: string,
   day: number,
   villageSeed: number,
+  /** How much faster (above 1) or slower this pair's friendship grows - gains only, never losses. */
+  growth = 1,
 ): Relationships {
   const key = pairKey(a, b);
   const current = relationships[key] ?? EMPTY_RELATIONSHIP;
@@ -137,7 +139,8 @@ export function applyEveningInteraction(
 
   const kind = rollInteractionKind(current, rng);
   const [min, max] = AFFINITY_DELTA[kind];
-  const affinityDelta = min === max ? min : min + rng() * (max - min);
+  const rolled = min === max ? min : min + rng() * (max - min);
+  const affinityDelta = rolled > 0 ? rolled * growth : rolled;
 
   return applyAffinityDelta(relationships, a, b, day, affinityDelta);
 }
@@ -163,23 +166,24 @@ export function applyGift(
   return applyAffinityDelta(relationships, from, to, day, affinityDelta);
 }
 
-/** Rolls one evening interaction for every unordered pair of villagers. */
+/**
+ * Rolls one evening interaction for every unordered pair of villagers.
+ * `growthOf` gives each villager's friendship-growth factor (their
+ * traits); a pair's gains are scaled by both of theirs.
+ */
 export function runEveningInteractions(
   relationships: Relationships,
   villagerIds: readonly string[],
   day: number,
   villageSeed: number,
+  growthOf: (villagerId: string) => number = () => 1,
 ): Relationships {
   let next = relationships;
   for (let i = 0; i < villagerIds.length; i++) {
     for (let j = i + 1; j < villagerIds.length; j++) {
-      next = applyEveningInteraction(
-        next,
-        villagerIds[i] as string,
-        villagerIds[j] as string,
-        day,
-        villageSeed,
-      );
+      const a = villagerIds[i] as string;
+      const b = villagerIds[j] as string;
+      next = applyEveningInteraction(next, a, b, day, villageSeed, growthOf(a) * growthOf(b));
     }
   }
   return next;

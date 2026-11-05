@@ -327,5 +327,9 @@
   when a hire doesn't name them. They're saved in the new `villager_traits`
   table (older saves get their villagers' traits on load), shown on the
   villager card, and given to the model as a speaking style that changes tone
-  and length, never facts. Their effects on work and friendships aren't
-  modelled yet (#166).
+  and length, never facts (#166).
+- Traits that act in the village: hardworking villagers' stints make 15%
+  more, and green-thumbed ones make 15% more in fields and gardens. Lazy
+  villagers nap through about 1 stint in 5, unpaid, with a private chronicle
+  line. Cheerful villagers' friendships grow 25% faster, and grumpy ones'
+  25% slower (#168).
