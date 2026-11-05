@@ -14,6 +14,7 @@ isn't CC0, CC-BY or OFL.
 | characters/boy.png               | Ninja Adventure asset pack (pixel-boy, https://pixel-boy.itch.io/ninja-adventure-asset-pack)                               | CC0                       |
 | characters/child.png             | Ninja Adventure asset pack (pixel-boy, https://pixel-boy.itch.io/ninja-adventure-asset-pack)                               | CC0                       |
 | characters/woman.png             | Ninja Adventure asset pack (pixel-boy, https://pixel-boy.itch.io/ninja-adventure-asset-pack)                               | CC0                       |
+| characters/cat.png               | Ninja Adventure asset pack (pixel-boy, https://pixel-boy.itch.io/ninja-adventure-asset-pack), Actor/Animal/CatOrange       | CC0                       |
 | characters/old-man.png           | Ninja Adventure asset pack (pixel-boy, https://pixel-boy.itch.io/ninja-adventure-asset-pack)                               | CC0                       |
 | characters/old-woman.png         | Ninja Adventure asset pack (pixel-boy, https://pixel-boy.itch.io/ninja-adventure-asset-pack)                               | CC0                       |
 | ui/panel.png                     | Ninja Adventure asset pack, Theme Wood nine_path_panel_3 (pixel-boy, https://pixel-boy.itch.io/ninja-adventure-asset-pack) | CC0                       |

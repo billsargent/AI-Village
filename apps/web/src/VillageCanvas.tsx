@@ -1,6 +1,9 @@
 import {
   BACK_WALL,
+  CAT_FRAMES,
+  catSpot,
   FLOORBOARDS,
+  getBuilding,
   GRASS_TILE,
   isBloom,
   isFoliage,
@@ -10,6 +13,7 @@ import {
   type BuildingId,
   type FurnitureKind,
   type MapId,
+  type SpriteFrame,
 } from '@ai-village/content';
 import {
   Application,
@@ -21,7 +25,7 @@ import {
   Texture,
   TilingSprite,
 } from 'pixi.js';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   dimmed,
   glowsFor,
@@ -33,7 +37,9 @@ import {
 } from './atmosphere.js';
 import { AtmosphereLayer, type AtmosphereState } from './atmosphere-layer.js';
 import { indoorLightAt, lightAt, lightWord } from './light.js';
+import { buildingSummary, whoIsIn } from './building-card.js';
 import { loadFrameTexture } from './load-frame-texture.js';
+import { Minimap, type MinimapView } from './Minimap.js';
 import { clampZoom, DEFAULT_ZOOM, stepZoom, zoomLevels } from './zoom.js';
 import type { VillageFacts } from './village-api.js';
 import { planInteriorDraw, roomZoom } from './interior-draw.js';
@@ -100,8 +106,7 @@ export interface RoomView {
 export interface VillageCanvasProps {
   data: VillageFacts;
   map?: MapId;
-  /** Buildings that open something when clicked - only these get a pointer cursor. */
-  clickableBuildingIds?: ReadonlySet<string> | undefined;
+  /** Clicking a building - the app opens its card. */
   onBuildingClick?: ((buildingId: string, slot: number) => void) | undefined;
   /**
    * The room the owner is inside, drawn full-screen in place of the map
@@ -114,21 +119,46 @@ export interface VillageCanvasProps {
   onFurnitureClick?: ((kind: FurnitureKind) => void) | undefined;
   /** How fast villagers walk against real time: 0 while the clock is paused (see `walkPace`). */
   pace?: number | undefined;
-  /** Clicking a villager - the app opens a chat with them. */
+  /** Clicking a villager - the app opens their card. */
   onVillagerClick?: ((villagerId: string) => void) | undefined;
+  /** A villager for the camera to follow as they walk (spec section 14's Follow button). */
+  follow?: string | null | undefined;
+  /** The owner took the camera back - dragged, panned or used the minimap - so following ends. */
+  onStopFollowing?: (() => void) | undefined;
 }
+
+/** Something that walks the map: a villager, or the cat. */
+interface Mover {
+  id: string;
+  kind: 'villager' | 'cat';
+  sprite: SpriteFrame;
+  /** Tile coordinates. */
+  x: number;
+  y: number;
+  hidden: boolean;
+  where: string;
+}
+
+/** The cat stands as a villager would on its tile, its wider sprite centred. */
+const CAT_OFFSET = { x: -3, y: -1 };
+/** How long each of the cat's two idle frames shows. */
+const CAT_FRAME_MS = 900;
 
 /** One villager's sprite on the map, and where their walk has got to. */
 interface Walker {
+  kind: 'villager' | 'cat';
   sprite: Sprite;
   state: WalkerState;
+  /** For the cat: its idle frames, swapped in turn. */
+  frames?: readonly Texture[];
   /** Read by the sprite's hover handler, so it always shows the latest. */
   where: string;
 }
 
 /** What the pointer is over, for the label under the map. */
 type Hovered =
-  | { kind: 'building'; id: string }
+  | { kind: 'building'; id: string; slot: number }
+  | { kind: 'cat'; id: 'cat'; where: string }
   | { kind: 'villager'; id: string; where: string }
   | { kind: 'furniture'; id: FurnitureKind };
 
@@ -228,23 +258,29 @@ function villagersKey(data: VillageFacts, map: MapId): string {
 export function VillageCanvas({
   data,
   map = 'main',
-  clickableBuildingIds,
   onBuildingClick,
   onVillagerClick,
   room = null,
   interactiveKinds,
   onFurnitureClick,
   pace = 1,
+  follow = null,
+  onStopFollowing,
 }: VillageCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const zoomByRef = useRef<((step: number) => void) | null>(null);
   const [hovered, setHovered] = useState<Hovered | null>(null);
   const [scene, setScene] = useState<Scene | null>(null);
 
-  // Refs, not effect dependencies: a new Set or callback identity on every
+  // Refs, not effect dependencies: a new callback identity on every
   // parent render shouldn't tear down and rebuild the whole scene.
-  const clickableRef = useRef(clickableBuildingIds);
-  clickableRef.current = clickableBuildingIds;
+  const followRef = useRef(follow);
+  followRef.current = follow;
+  const onStopFollowingRef = useRef(onStopFollowing);
+  onStopFollowingRef.current = onStopFollowing;
+  // Set up with the renderer: what's on screen, and a way to look somewhere else.
+  const viewRef = useRef<MinimapView | null>(null);
+  const jumpRef = useRef<((x: number, y: number) => void) | null>(null);
   const onClickRef = useRef(onBuildingClick);
   onClickRef.current = onBuildingClick;
   const onVillagerClickRef = useRef(onVillagerClick);
@@ -294,7 +330,42 @@ export function VillageCanvas({
   const planRef = useRef(plan);
   planRef.current = plan;
   const whoKey = villagersKey(data, map);
-  const placements = useMemo(() => villagersOnMap(dataRef.current, map), [whoKey, map]);
+  const catKey = `${data.year}-${data.season}-${data.seasonDay}|${data.hour}`;
+  const movers = useMemo((): readonly Mover[] => {
+    const current = dataRef.current;
+    const villagers: Mover[] = villagersOnMap(current, map).map((placement) => ({
+      id: placement.villager.id,
+      kind: 'villager',
+      sprite: placement.sprite,
+      x: placement.x,
+      y: placement.y,
+      hidden: placement.hidden,
+      where: placement.where,
+    }));
+    if (map !== 'main') {
+      return villagers;
+    }
+    const cat = catSpot(
+      `${current.year}-${current.season}-${current.seasonDay}`,
+      current.hour,
+      current.builtBuildingIds,
+    );
+    const catFrame = CAT_FRAMES[0];
+    return catFrame
+      ? [
+          ...villagers,
+          {
+            id: 'cat',
+            kind: 'cat',
+            sprite: catFrame,
+            x: cat.x,
+            y: cat.y,
+            hidden: false,
+            where: cat.where,
+          },
+        ]
+      : villagers;
+  }, [whoKey, catKey, map]);
   const grid = useMemo(() => walkGrid(map, dataRef.current.builtBuildingIds), [key, map]);
   const roomBuildingId = room?.buildingId ?? null;
   const roomSlot = room?.slot;
@@ -371,6 +442,12 @@ export function VillageCanvas({
             ? height / 2
             : Math.min(Math.max(camera.y, viewH / 2), height - viewH / 2);
         world.scale.set(zoom);
+        viewRef.current = {
+          x: camera.x - viewW / 2,
+          y: camera.y - viewH / 2,
+          width: viewW,
+          height: viewH,
+        };
         // Whole screen pixels only, so pixel art never shimmers between them.
         world.position.set(
           Math.round(app.screen.width / 2 - camera.x * zoom),
@@ -379,6 +456,18 @@ export function VillageCanvas({
       };
       applyCamera();
       app.renderer.on('resize', applyCamera);
+
+      const takeCameraBack = () => {
+        if (followRef.current) {
+          onStopFollowingRef.current?.();
+        }
+      };
+      jumpRef.current = (x: number, y: number) => {
+        takeCameraBack();
+        camera.x = x;
+        camera.y = y;
+        applyCamera();
+      };
 
       zoomByRef.current = (step: number) => {
         if (!app) {
@@ -410,6 +499,9 @@ export function VillageCanvas({
         const dy = event.clientY - drag.startY;
         if (!dragged && Math.hypot(dx, dy) < DRAG_THRESHOLD) {
           return;
+        }
+        if (!dragged) {
+          takeCameraBack();
         }
         dragged = true;
         canvas.style.cursor = 'grabbing';
@@ -452,6 +544,7 @@ export function VillageCanvas({
         const pan = pans[event.key.length === 1 ? event.key.toLowerCase() : event.key];
         if (pan) {
           event.preventDefault();
+          takeCameraBack();
           camera.x += pan[0] * PAN_STEP;
           camera.y += pan[1] * PAN_STEP;
           applyCamera();
@@ -519,6 +612,7 @@ export function VillageCanvas({
       // Each frame: every villager takes their next step, or fades at a door;
       // the light and weather move on.
       const reducedMotion = prefersReducedMotion();
+      let idleMs = 0;
       app.ticker.add((ticker) => {
         atmosphere.update(
           ticker.deltaMS,
@@ -530,13 +624,31 @@ export function VillageCanvas({
           world,
         );
         const walkMs = ticker.deltaMS * paceRef.current;
+        idleMs += ticker.deltaMS;
         for (const walker of walkers.values()) {
           walker.state = stepWalker(walker.state, walkMs, reducedMotion);
           const at = walkerPosition(walker.state, reducedMotion);
-          walker.sprite.position.set(Math.round(at.x * TILE_PX), Math.round(at.y * TILE_PX));
+          const offset = walker.kind === 'cat' ? CAT_OFFSET : { x: 0, y: 0 };
+          walker.sprite.position.set(
+            Math.round(at.x * TILE_PX) + offset.x,
+            Math.round(at.y * TILE_PX) + offset.y,
+          );
           walker.sprite.zIndex = walker.sprite.y + walker.sprite.height;
           walker.sprite.alpha = walker.state.alpha;
           walker.sprite.visible = walker.state.visible;
+          if (walker.frames && !reducedMotion) {
+            const frame = walker.frames[Math.floor(idleMs / CAT_FRAME_MS) % walker.frames.length];
+            if (frame && walker.sprite.texture !== frame) {
+              walker.sprite.texture = frame;
+            }
+          }
+        }
+        // Following someone: keep them in the middle of the screen.
+        const followed = followRef.current ? walkers.get(followRef.current) : undefined;
+        if (followed && !insideRef.current) {
+          camera.x = followed.sprite.x + followed.sprite.width / 2;
+          camera.y = followed.sprite.y + followed.sprite.height / 2;
+          applyCamera();
         }
       });
 
@@ -560,6 +672,8 @@ export function VillageCanvas({
     return () => {
       cancelled.current = true;
       zoomByRef.current = null;
+      jumpRef.current = null;
+      viewRef.current = null;
       setScene(null);
       for (const cleanup of cleanups) {
         cleanup();
@@ -607,17 +721,15 @@ export function VillageCanvas({
         if (item.kind === 'building') {
           const { buildingId, slot } = item;
           sprite.eventMode = 'static';
+          sprite.cursor = 'pointer';
           sprite.on('pointerover', () => {
-            setHovered({ kind: 'building', id: buildingId });
-            if (clickableRef.current?.has(buildingId)) {
-              sprite.cursor = 'pointer';
-            }
+            setHovered({ kind: 'building', id: buildingId, slot });
           });
           sprite.on('pointerout', () => {
             setHovered((now) => (now?.id === buildingId ? null : now));
           });
           sprite.on('pointertap', () => {
-            if (!current.isDragging() && clickableRef.current?.has(buildingId)) {
+            if (!current.isDragging()) {
               onClickRef.current?.(buildingId, slot);
             }
           });
@@ -673,8 +785,8 @@ export function VillageCanvas({
 
     async function update(current: Scene) {
       const seen = new Set<string>();
-      for (const placement of placements) {
-        const id = placement.villager.id;
+      for (const placement of movers) {
+        const id = placement.id;
         seen.add(id);
         const target = { x: placement.x, y: placement.y, hidden: placement.hidden };
         const existing = current.walkers.get(id);
@@ -684,6 +796,10 @@ export function VillageCanvas({
           continue;
         }
         const texture = await loadFrameTexture(placement.sprite);
+        const frames =
+          placement.kind === 'cat'
+            ? await Promise.all(CAT_FRAMES.map((frame) => loadFrameTexture(frame)))
+            : undefined;
         // Set by the cleanup below, across the await.
         if (cancelled.current) {
           return;
@@ -698,8 +814,26 @@ export function VillageCanvas({
         });
         sprite.zIndex = sprite.y + sprite.height;
         sprite.eventMode = 'static';
+        const walker: Walker = {
+          kind: placement.kind,
+          sprite,
+          state,
+          where: placement.where,
+          ...(frames ? { frames } : {}),
+        };
+        if (placement.kind === 'cat') {
+          // The cat can be looked at, but it's nobody's to inspect.
+          sprite.on('pointerover', () => {
+            setHovered({ kind: 'cat', id: 'cat', where: walker.where });
+          });
+          sprite.on('pointerout', () => {
+            setHovered((now) => (now?.kind === 'cat' ? null : now));
+          });
+          current.objectsHost.addChild(sprite);
+          current.walkers.set(id, walker);
+          continue;
+        }
         sprite.cursor = 'pointer';
-        const walker: Walker = { sprite, state, where: placement.where };
         sprite.on('pointerover', () => {
           setHovered({ kind: 'villager', id, where: walker.where });
         });
@@ -727,7 +861,36 @@ export function VillageCanvas({
     return () => {
       cancelled.current = true;
     };
-  }, [scene, placements, grid]);
+  }, [scene, movers, grid]);
+
+  // For the minimap: villagers out in the open, in map pixels.
+  const readDots = useCallback(
+    () =>
+      scene
+        ? [...scene.walkers.values()]
+            .filter((walker) => walker.kind === 'villager' && walker.state.visible)
+            .map((walker) => ({ x: walker.sprite.x + 8, y: walker.sprite.y + 8 }))
+        : [],
+    [scene],
+  );
+  const readView = useCallback(() => viewRef.current, []);
+  const jump = useCallback((x: number, y: number) => {
+    jumpRef.current?.(x, y);
+  }, []);
+  const minimapBuildings = useMemo(
+    () =>
+      plan.buildings.map((building) => {
+        const [fw, fh] = getBuilding(building.buildingId)?.footprintTiles ?? [1, 1];
+        const plotX = building.x + building.sprite.width / 2 - (fw * TILE_PX) / 2;
+        return {
+          x: plotX,
+          y: building.y + building.sprite.height - fh * TILE_PX,
+          width: fw * TILE_PX,
+          height: fh * TILE_PX,
+        };
+      }),
+    [plan],
+  );
 
   // The room: drawn over the dark in place of the map while the owner is inside.
   useEffect(() => {
@@ -869,34 +1032,100 @@ export function VillageCanvas({
       {hovered && (
         <div className="wood-panel pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 px-1 text-lg whitespace-nowrap">
           {hovered.kind === 'building'
-            ? `${titleCase(hovered.id)}${clickableBuildingIds?.has(hovered.id) ? ' - click to go inside' : ''}`
-            : hovered.kind === 'furniture'
-              ? `${titleCase(hovered.id)} - click to look`
-              : `${titleCase(hovered.id)}, ${hovered.where} - click to meet them`}
+            ? buildingLabel(data, hovered.id, hovered.slot)
+            : hovered.kind === 'cat'
+              ? `The village cat, ${hovered.where}`
+              : hovered.kind === 'furniture'
+                ? `${titleCase(hovered.id)} - click to look`
+                : `${titleCase(hovered.id)}, ${hovered.where} - click to meet them`}
         </div>
       )}
-      <div className={`absolute right-3 bottom-3 z-10 flex gap-1 ${inside ? 'hidden' : ''}`}>
-        <button
-          type="button"
-          aria-label="Zoom out"
-          onClick={() => {
-            zoomByRef.current?.(-1);
-          }}
-          className="wood-button w-10 text-xl"
+      {/*
+        Spec section 14: every hotspot and villager is a focusable button with
+        a label. Out of sight until a keyboard reaches it, then shown over the map.
+      */}
+      {!inside && (
+        <nav
+          aria-label="On the map"
+          className="sr-only focus-within:not-sr-only focus-within:absolute focus-within:top-3 focus-within:left-1/2 focus-within:z-20 focus-within:max-h-[60%] focus-within:-translate-x-1/2 focus-within:overflow-auto"
         >
-          -
-        </button>
-        <button
-          type="button"
-          aria-label="Zoom in"
-          onClick={() => {
-            zoomByRef.current?.(1);
-          }}
-          className="wood-button w-10 text-xl"
-        >
-          +
-        </button>
+          <ul className="wood-panel flex flex-col gap-1 p-1 text-sm">
+            {plan.buildings.map((building) => {
+              const summary = buildingSummary(data, building.buildingId, building.slot);
+              const who = whoIsIn(building.buildingId, summary.inside);
+              return (
+                <li key={`${building.buildingId}-${building.slot}`}>
+                  <button
+                    type="button"
+                    className="wood-button w-full text-left"
+                    onClick={() => {
+                      onBuildingClick?.(building.buildingId, building.slot);
+                    }}
+                  >
+                    The {summary.title.toLowerCase()}: {who ?? 'nobody is in'}
+                  </button>
+                </li>
+              );
+            })}
+            {movers
+              .filter((mover) => mover.kind === 'villager')
+              .map((mover) => (
+                <li key={mover.id}>
+                  <button
+                    type="button"
+                    className="wood-button w-full text-left"
+                    onClick={() => {
+                      onVillagerClick?.(mover.id);
+                    }}
+                  >
+                    {titleCase(mover.id)}, {mover.where}
+                  </button>
+                </li>
+              ))}
+          </ul>
+        </nav>
+      )}
+
+      <div
+        className={`absolute right-3 bottom-3 z-10 flex flex-col items-end gap-1 ${inside ? 'hidden' : ''}`}
+      >
+        <Minimap
+          map={map}
+          buildings={minimapBuildings}
+          readView={readView}
+          readDots={readDots}
+          onJump={jump}
+        />
+        <div className="flex gap-1">
+          <button
+            type="button"
+            aria-label="Zoom out"
+            onClick={() => {
+              zoomByRef.current?.(-1);
+            }}
+            className="wood-button w-10 text-xl"
+          >
+            -
+          </button>
+          <button
+            type="button"
+            aria-label="Zoom in"
+            onClick={() => {
+              zoomByRef.current?.(1);
+            }}
+            className="wood-button w-10 text-xl"
+          >
+            +
+          </button>
+        </div>
       </div>
     </div>
   );
+}
+
+/** "Cottage - Hesper and Ada are home - click to look" for the hover label. */
+function buildingLabel(data: VillageFacts, buildingId: string, slot: number): string {
+  const summary = buildingSummary(data, buildingId, slot);
+  const who = whoIsIn(buildingId, summary.inside);
+  return `${summary.title}${who ? ` - ${who}` : ''} - click to look`;
 }

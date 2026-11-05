@@ -18,3 +18,4 @@ export * from './names.js';
 export * from './terrain.js';
 export * from './whereabouts.js';
 export * from './paths.js';
+export * from './cat.js';

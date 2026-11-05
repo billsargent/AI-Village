@@ -111,10 +111,13 @@ export function VillagerCardPanel({
   villagerId,
   where,
   onChat,
+  onFollow,
 }: {
   villagerId: string;
   where: string | null;
   onChat: () => void;
+  /** Spec section 14's Follow button: the camera follows them about. */
+  onFollow?: (() => void) | undefined;
 }) {
   const { data: card, isPending, isError } = useVillagerCard(villagerId);
   const thank = useThankVillager();
@@ -159,6 +162,11 @@ export function VillagerCardPanel({
             <button type="button" className="wood-button" onClick={onChat}>
               Chat with {name}
             </button>
+            {onFollow && (
+              <button type="button" className="wood-button" onClick={onFollow}>
+                Follow {name}
+              </button>
+            )}
             <button
               type="button"
               className="wood-button"

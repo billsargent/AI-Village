@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { loadTextSize, saveTextSize, TEXT_SIZES, type TextSize } from './text-size.js';
 import {
   useClearDeepseekApiKey,
   useSaveDeepseekApiKey,
@@ -76,6 +77,7 @@ export function SettingsPanel() {
       {saveKey.isError && <p className="mt-2 text-sm text-red-800">Couldn't save the key.</p>}
       {clearKey.isError && <p className="mt-2 text-sm text-red-800">Couldn't clear the key.</p>}
       {data && <MayorSettings status={data} />}
+      <TextSizeSetting />
     </div>
   );
 }
@@ -178,6 +180,32 @@ function MayorSettings({ status }: { status: SettingsStatus }) {
           {save.error.message}
         </p>
       )}
+    </section>
+  );
+}
+
+/** Spec section 14: a text size setting, 100-150%. Kept in this browser. */
+function TextSizeSetting() {
+  const [size, setSize] = useState<TextSize>(loadTextSize);
+  return (
+    <section className="mt-4 border-t-2 border-parchment-dark pt-3">
+      <h3 className="text-xl">Text size</h3>
+      <div className="mt-1 flex gap-1" role="group" aria-label="Text size">
+        {TEXT_SIZES.map((option) => (
+          <button
+            key={option}
+            type="button"
+            aria-pressed={option === size}
+            className="wood-button text-sm"
+            onClick={() => {
+              setSize(option);
+              saveTextSize(option);
+            }}
+          >
+            {option}%
+          </button>
+        ))}
+      </div>
     </section>
   );
 }

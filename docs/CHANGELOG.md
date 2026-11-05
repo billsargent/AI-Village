@@ -370,3 +370,23 @@
 - Zoom out to the whole map: 1x, and on smaller screens one level further
   that fits the entire map on screen. Closer in, zoom stays in whole steps
   (#185).
+- A command palette on Ctrl+K: find a villager (by name or trade) to meet,
+  chat with or follow; go inside a building or to another map; open the
+  inbox, settings or journal; or pause and change the clock's speed (#187).
+- Space pauses the clock and resumes it at the speed it had (#188).
+- A minimap in the corner with the ground, buildings, a dot for each
+  villager in the open, and a box round what's on screen. Click it to look
+  there (#189).
+- Follow a villager from their card or the palette. The camera keeps them
+  centred until you drag, pan or stop (#190).
+- Clicking any building opens its card: who works there out of how many
+  places, who lives there, who's inside now, and Go inside if it has a
+  room (#191).
+- Hovering over a building says who's in: "Cottage - Hesper and Ada are
+  home" (#192).
+- Every building and villager on the map is also a keyboard-focusable
+  button with a label, shown over the map when reached by Tab (#193).
+- A text size setting (100%, 115%, 130%, 150%), remembered in the
+  browser (#194).
+- The village cat: an orange cat that naps somewhere new each hour and
+  sleeps on the inn's or town hall's doorstep at night (#195).

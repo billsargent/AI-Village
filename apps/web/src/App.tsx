@@ -1,6 +1,9 @@
 import type { BuildingId, FurnitureKind, MapId } from '@ai-village/content';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { buildingSummary, namesList } from './building-card.js';
 import { ChatPanel } from './ChatPanel.js';
+import { CommandPalette, type PaletteItem } from './CommandPalette.js';
+import { applyTextSize, loadTextSize } from './text-size.js';
 import { VillagerCardPanel } from './VillagerCardPanel.js';
 import { walkPace } from './atmosphere.js';
 import { buildingsWithInteriors } from './interior-draw.js';
@@ -176,10 +179,33 @@ export function App() {
   const [showInbox, setShowInbox] = useState(false);
   const [chatWith, setChatWith] = useState<string | null>(null);
   const [cardFor, setCardFor] = useState<string | null>(null);
+  const [buildingCard, setBuildingCard] = useState<{ buildingId: string; slot: number } | null>(
+    null,
+  );
+  const [following, setFollowing] = useState<string | null>(null);
+  const [showPalette, setShowPalette] = useState(false);
   const pendingApprovals = usePendingApprovalCount();
   const { data: clockStatus } = useClockStatus();
+  const setSpeed = useSetClockSpeed();
+  // The speed to go back to when Space resumes a paused clock.
+  const lastSpeedRef = useRef<ClockSpeed>(1);
+  if (clockStatus && clockStatus.speed !== 0 && !clockStatus.paused) {
+    lastSpeedRef.current = clockStatus.speed;
+  }
+  const clockPaused = clockStatus ? clockStatus.paused || clockStatus.speed === 0 : false;
   const firstVillagerId = data?.villagers[0]?.id ?? null;
-  const overlayOpen = showSettings || showInbox || chatWith !== null || cardFor !== null;
+  const overlayOpen =
+    showSettings ||
+    showInbox ||
+    showPalette ||
+    chatWith !== null ||
+    cardFor !== null ||
+    buildingCard !== null;
+
+  // The owner's text size, from last time (spec section 14).
+  useEffect(() => {
+    applyTextSize(loadTextSize());
+  }, []);
 
   const enterRoom = (next: RoomView) => {
     setRoom(next);
@@ -194,14 +220,28 @@ export function App() {
   const leaveRoomRef = useRef(leaveRoom);
   leaveRoomRef.current = leaveRoom;
 
-  // Spec section 14's keys: C opens the chat (with the first villager), I the inbox.
+  // Spec section 14's keys: Ctrl+K the command palette, Space to pause, C
+  // opens the chat (with the first villager), I the inbox.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setShowPalette((shown) => !shown);
         return;
       }
+      const target = event.target as HTMLElement | null;
+      if (target && ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName)) {
+        // A focused button takes Space and Enter for itself.
+        if (target.tagName !== 'BUTTON' || event.key === ' ') {
+          return;
+        }
+      }
       if (event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+      }
+      if (event.key === ' ' && !overlayOpen) {
+        event.preventDefault();
+        setSpeed.mutate(clockPaused ? lastSpeedRef.current : 0);
         return;
       }
       // Escape steps back out: first off an open furniture panel, then out of the room.
@@ -223,7 +263,7 @@ export function App() {
     return () => {
       window.removeEventListener('keydown', onKey);
     };
-  }, [firstVillagerId, room, panel, overlayOpen]);
+  }, [firstVillagerId, room, panel, overlayOpen, clockPaused, setSpeed]);
 
   if (isPending) {
     return (
@@ -246,15 +286,120 @@ export function App() {
 
   const occupants = room ? villagersInside(data, room.buildingId, room.slot) : [];
 
+  // Everything the command palette can find (spec section 14).
+  const paletteItems: PaletteItem[] = [
+    ...data.villagers.flatMap((villager) => {
+      const name = capitalise(villager.id);
+      const trade = villager.role === 'mayor' ? 'the mayor' : villager.tradeId;
+      return [
+        {
+          id: `meet-${villager.id}`,
+          label: name,
+          hint: `Meet ${trade}`,
+          keywords: villager.tradeId,
+          run: () => {
+            setCardFor(villager.id);
+          },
+        },
+        {
+          id: `chat-${villager.id}`,
+          label: `Chat with ${name}`,
+          hint: 'Chat',
+          keywords: villager.tradeId,
+          run: () => {
+            setChatWith(villager.id);
+          },
+        },
+        {
+          id: `follow-${villager.id}`,
+          label: `Follow ${name}`,
+          hint: 'Follow on the map',
+          keywords: villager.tradeId,
+          run: () => {
+            setRoom(null);
+            setFollowing(villager.id);
+          },
+        },
+      ];
+    }),
+    ...furnished.map((buildingId) => ({
+      id: `enter-${buildingId}`,
+      label: titleCase(buildingId),
+      hint: 'Go inside',
+      keywords: 'place building room',
+      run: () => {
+        enterRoom({ buildingId });
+      },
+    })),
+    ...(Object.keys(MAP_LABELS) as MapId[]).map((mapId) => ({
+      id: `map-${mapId}`,
+      label: MAP_LABELS[mapId],
+      hint: 'Go to this map',
+      keywords: 'map place',
+      run: () => {
+        setRoom(null);
+        setMap(mapId);
+      },
+    })),
+    {
+      id: 'inbox',
+      label: 'Inbox',
+      hint: 'Approvals waiting on you',
+      keywords: 'approvals',
+      run: () => {
+        setShowInbox(true);
+      },
+    },
+    {
+      id: 'settings',
+      label: 'Settings',
+      hint: 'Models, budget, text size',
+      keywords: 'budget key text size',
+      run: () => {
+        setShowSettings(true);
+      },
+    },
+    {
+      id: 'journal',
+      label: 'Journal',
+      hint: showJournal ? 'Fold it away' : 'Open it',
+      keywords: 'chronicle notice board people',
+      run: () => {
+        setShowJournal((shown) => !shown);
+      },
+    },
+    {
+      id: 'pause',
+      label: clockPaused ? 'Resume' : 'Pause',
+      hint: 'The village clock',
+      keywords: 'clock speed time',
+      run: () => {
+        setSpeed.mutate(clockPaused ? lastSpeedRef.current : 0);
+      },
+    },
+    ...([1, 2, 4] as const).map((speed) => ({
+      id: `speed-${speed}`,
+      label: `${speed}x speed`,
+      hint: 'The village clock',
+      keywords: 'clock speed time faster',
+      run: () => {
+        setSpeed.mutate(speed);
+      },
+    })),
+  ];
+
   return (
     <main className="relative h-full w-full overflow-hidden">
       <div className="absolute inset-0">
         <VillageCanvas
           data={data}
           map={map}
-          clickableBuildingIds={new Set(furnished)}
           onBuildingClick={(buildingId, slot) => {
-            enterRoom({ buildingId: buildingId as BuildingId, slot });
+            setBuildingCard({ buildingId, slot });
+          }}
+          follow={following}
+          onStopFollowing={() => {
+            setFollowing(null);
           }}
           room={room}
           pace={walkPace(clockStatus, data.weather)}
@@ -459,6 +604,30 @@ export function App() {
         )}
       </div>
 
+      {following && !room && (
+        <div className="wood-panel absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 px-2">
+          <span>Following {capitalise(following)}</span>
+          <button
+            type="button"
+            className="wood-button text-sm"
+            onClick={() => {
+              setFollowing(null);
+            }}
+          >
+            Stop
+          </button>
+        </div>
+      )}
+
+      {showPalette && (
+        <CommandPalette
+          items={paletteItems}
+          onClose={() => {
+            setShowPalette(false);
+          }}
+        />
+      )}
+
       {room ? (
         <>
           {/* Inside: the room's name over the door, who's in, and the way out. */}
@@ -502,7 +671,7 @@ export function App() {
         </>
       ) : (
         <p className="map-text pointer-events-none absolute bottom-3 left-3 z-10 text-sm">
-          Drag or WASD to look around - click a building to go inside, or a villager to meet them
+          Drag or WASD to look around - click a building or a villager - Ctrl+K to find anything
         </p>
       )}
 
@@ -520,9 +689,77 @@ export function App() {
               setCardFor(null);
               setChatWith(cardFor);
             }}
+            onFollow={() => {
+              setCardFor(null);
+              setRoom(null);
+              setFollowing(cardFor);
+            }}
           />
         </Dialog>
       )}
+
+      {buildingCard &&
+        (() => {
+          const summary = buildingSummary(data, buildingCard.buildingId, buildingCard.slot);
+          return (
+            <Dialog
+              title={summary.title}
+              onClose={() => {
+                setBuildingCard(null);
+              }}
+            >
+              <div className="flex w-72 flex-col gap-2 text-sm">
+                {summary.places > 0 && (
+                  <p>
+                    {summary.workers.length > 0
+                      ? `Worked by ${namesList(summary.workers)}`
+                      : 'Nobody works here yet'}{' '}
+                    ({summary.workers.length} of {summary.places}{' '}
+                    {summary.places === 1 ? 'place' : 'places'}).
+                  </p>
+                )}
+                {summary.residents.length > 0 && <p>Home to {namesList(summary.residents)}.</p>}
+                <p>
+                  {summary.inside.length > 0
+                    ? `${namesList(summary.inside)} ${summary.inside.length === 1 ? 'is' : 'are'} inside now.`
+                    : 'Nobody is inside right now.'}
+                </p>
+                {[...summary.workers, ...summary.residents]
+                  .filter((villager, index, all) => all.indexOf(villager) === index)
+                  .map((villager) => (
+                    <button
+                      key={villager.id}
+                      type="button"
+                      className="text-left underline decoration-dotted underline-offset-2"
+                      onClick={() => {
+                        setBuildingCard(null);
+                        setCardFor(villager.id);
+                      }}
+                    >
+                      About {capitalise(villager.id)}
+                    </button>
+                  ))}
+                {summary.canEnter ? (
+                  <button
+                    type="button"
+                    className="wood-button self-start"
+                    onClick={() => {
+                      setBuildingCard(null);
+                      enterRoom({
+                        buildingId: summary.buildingId as BuildingId,
+                        slot: summary.slot,
+                      });
+                    }}
+                  >
+                    Go inside
+                  </button>
+                ) : (
+                  <p className="text-ink-soft">There's no room to look inside yet.</p>
+                )}
+              </div>
+            </Dialog>
+          );
+        })()}
 
       {chatWith && (
         <Dialog
