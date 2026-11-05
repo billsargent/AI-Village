@@ -14,7 +14,7 @@ function capitalise(word: string): string {
 const PORTRAIT_SCALE = 4;
 
 /** The villager's own map sprite, drawn big - the art set has no separate portraits yet. */
-function Portrait({ villagerId }: { villagerId: string }) {
+export function Portrait({ villagerId }: { villagerId: string }) {
   const frame = spriteForVillager(villagerId);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 

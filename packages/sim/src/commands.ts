@@ -52,6 +52,7 @@ export type Command =
 export type DomainEvent =
   | { kind: 'GiftGiven'; from: string; to: string; item: string; qty: number }
   | { kind: 'BuildingFinished'; buildingId: string }
+  | { kind: 'BuildingStarted'; buildingId: string; finishesOnDay: number }
   | { kind: 'OrderAccepted'; orderId: number }
   | { kind: 'OrderDeclined'; orderId: number }
   | { kind: 'PostedOnBoard'; postId: number }
@@ -166,6 +167,12 @@ function applyProposeBuilding(state: VillageState, command: { buildingId: string
     throw new CommandError(`"${building.id}" is already built`);
   }
   if (
+    !building.multiInstance &&
+    state.constructionSites.some((site) => site.buildingId === building.id)
+  ) {
+    throw new CommandError(`"${building.id}" is already being built`);
+  }
+  if (
     building.unlocksAtPopulation !== null &&
     state.villagers.length < building.unlocksAtPopulation
   ) {
@@ -196,11 +203,32 @@ function applyProposeBuilding(state: VillageState, command: { buildingId: string
     });
   }
 
-  // Not yet modeled: multi-day construction (buildDays) and the owner/
-  // vote/Mayor approval routing from Settings (spec section 6). The
-  // building completes immediately on a successful command, the same
-  // way the work system simplifies the full schedule system until a real
-  // one lands.
+  const name = building.id.replace(/-/g, ' ');
+  // Spec section 6's build days: anything that takes time goes up as a
+  // site, finished by the day's settle. (Still not modeled: the owner/
+  // vote/Mayor approval routing from Settings.)
+  if (building.buildDays > 0) {
+    const today = calendarDateFromMinute(state.clock.minute).absoluteDay;
+    const finishesOnDay = today + building.buildDays;
+    const days = building.buildDays === 1 ? 'a day' : `${building.buildDays} days`;
+    return {
+      state: {
+        ...state,
+        ledger,
+        constructionSites: [...state.constructionSites, { buildingId: building.id, finishesOnDay }],
+        chronicle: appendChronicle(state.chronicle, {
+          minute: state.clock.minute,
+          kind: 'building',
+          text: `Work began on the ${name}. It will take ${days}.`,
+          actors: [],
+          importance: 3,
+          public: true,
+        }),
+      },
+      events: [{ kind: 'BuildingStarted', buildingId: building.id, finishesOnDay }],
+    };
+  }
+
   const chronicle = appendChronicle(state.chronicle, {
     minute: state.clock.minute,
     kind: 'building',

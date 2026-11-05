@@ -51,10 +51,11 @@ describe('interiors', () => {
     expect(INTERIOR_LAYOUTS['forest-hut']).toBeDefined();
   });
 
-  it('leaves a building needing trade-specific furniture without a layout', () => {
-    expect(INTERIOR_LAYOUTS.bakery).toBeUndefined();
-    expect(INTERIOR_LAYOUTS.smithy).toBeUndefined();
-    expect(INTERIOR_LAYOUTS.chapel).toBeUndefined();
+  it('furnishes the trade buildings too, and leaves the clocktower (no sprite yet) without a room', () => {
+    for (const id of ['bakery', 'mill', 'workshop', 'smithy', 'smokehouse', 'chapel'] as const) {
+      expect(INTERIOR_LAYOUTS[id]?.length).toBeGreaterThan(0);
+    }
+    expect(INTERIOR_LAYOUTS.clocktower).toBeUndefined();
   });
 
   it('leaves the dock and the outdoor garden plots without a layout - not enclosed spaces', () => {

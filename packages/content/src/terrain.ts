@@ -56,6 +56,21 @@ export const DIRT_TILES = {
   innerSe: tile(6, 1),
 } as const;
 
+/**
+ * The sheet's 3x3 wooden fence (columns 4-6, rows 15-17): corners, rails
+ * and side posts, read off a grid overlay. It goes round the fields.
+ */
+export const FENCE_TILES = {
+  nw: tile(4, 15),
+  n: tile(5, 15),
+  ne: tile(6, 15),
+  w: tile(4, 16),
+  e: tile(6, 16),
+  sw: tile(4, 17),
+  s: tile(5, 17),
+  se: tile(6, 17),
+} as const;
+
 /** The 3x3 pond tiles (sheet columns 11-13, rows 0-2): water with grassy banks. */
 export const WATER_TILES = {
   center: tile(12, 1),

@@ -5,7 +5,7 @@ import { apply, CommandError, OWNER_AUTHOR } from './commands.js';
 import { getBalance, InsufficientBalanceError } from './ledger.js';
 import type { Order } from './orders.js';
 import { getRelationship } from './relationships.js';
-import { createVillage, type VillageState } from './systems.js';
+import { createVillage, runVillageDay, type VillageState } from './systems.js';
 
 function villageWithOrder(order: Partial<Order> = {}): VillageState {
   const village = createVillage(1);
@@ -92,7 +92,7 @@ describe('apply GiveGift', () => {
 });
 
 describe('apply ProposeBuilding', () => {
-  it('charges coins and materials and adds the building once built', () => {
+  it('charges coins and materials and starts a site that takes its build days', () => {
     const village = createVillage(1, {
       startingStock: [
         { account: 'treasury', item: 'coins', qty: 100 },
@@ -102,10 +102,54 @@ describe('apply ProposeBuilding', () => {
 
     const { state, events } = apply(village, { kind: 'ProposeBuilding', buildingId: 'cottage' });
 
-    expect(state.builtBuildingIds).toContain('cottage');
+    expect(state.builtBuildingIds).not.toContain('cottage');
+    expect(state.constructionSites).toEqual([{ buildingId: 'cottage', finishesOnDay: 2 }]);
     expect(getBalance(state.ledger, 'treasury', 'coins')).toBe(60);
     expect(getBalance(state.ledger, 'village', 'planks')).toBe(0);
-    expect(events).toEqual([{ kind: 'BuildingFinished', buildingId: 'cottage' }]);
+    expect(events).toEqual([{ kind: 'BuildingStarted', buildingId: 'cottage', finishesOnDay: 2 }]);
+    expect(state.chronicle.at(-1)?.text).toBe('Work began on the cottage. It will take 2 days.');
+  });
+
+  it('finishes a site once its build days have passed', () => {
+    const village = createVillage(1, {
+      startingStock: [
+        { account: 'treasury', item: 'coins', qty: 100 },
+        { account: 'village', item: 'planks', qty: 20 },
+      ],
+    });
+    const started = apply(village, { kind: 'ProposeBuilding', buildingId: 'cottage' }).state;
+
+    const dayOne = runVillageDay(started).state;
+    expect(dayOne.builtBuildingIds).not.toContain('cottage');
+    expect(dayOne.constructionSites).toHaveLength(1);
+
+    const dayTwo = runVillageDay(dayOne).state;
+    expect(dayTwo.builtBuildingIds).toContain('cottage');
+    expect(dayTwo.constructionSites).toEqual([]);
+    expect(dayTwo.chronicle.map((entry) => entry.text)).toContain('The cottage is finished.');
+  });
+
+  it('builds at once when there are no build days', () => {
+    const village = createVillage(1);
+    const { state, events } = apply(village, {
+      kind: 'ProposeBuilding',
+      buildingId: 'riverside-jetty',
+    });
+    expect(state.builtBuildingIds).toContain('riverside-jetty');
+    expect(events).toEqual([{ kind: 'BuildingFinished', buildingId: 'riverside-jetty' }]);
+  });
+
+  it("won't start a one-off building twice", () => {
+    const village = createVillage(1, {
+      startingStock: [
+        { account: 'treasury', item: 'coins', qty: 200 },
+        { account: 'village', item: 'logs', qty: 20 },
+      ],
+    });
+    const started = apply(village, { kind: 'ProposeBuilding', buildingId: 'workshop' }).state;
+    expect(() => apply(started, { kind: 'ProposeBuilding', buildingId: 'workshop' })).toThrow(
+      'already being built',
+    );
   });
 
   it('rejects an unknown building', () => {
@@ -128,7 +172,8 @@ describe('apply ProposeBuilding', () => {
       startingStock: [{ account: 'treasury', item: 'coins', qty: 100 }],
     });
     const { state } = apply(village, { kind: 'ProposeBuilding', buildingId: 'fields' });
-    expect(state.builtBuildingIds).toEqual(['fields', 'fields']);
+    expect(state.builtBuildingIds).toEqual(['fields']);
+    expect(state.constructionSites.map((site) => site.buildingId)).toEqual(['fields']);
   });
 
   it('rejects a building whose population requirement is not met', () => {

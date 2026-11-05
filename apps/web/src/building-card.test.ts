@@ -27,6 +27,7 @@ const FACTS: VillageFacts = {
   recentChronicle: [],
   festivals: [],
   boardPosts: [],
+  constructionSites: [],
 };
 
 describe('buildingSummary', () => {

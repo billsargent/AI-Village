@@ -38,6 +38,7 @@ export function toSnapshot(
       savedAtRealMs,
     },
     builtBuildingIds: state.builtBuildingIds,
+    constructionSites: state.constructionSites,
     villagers: state.villagers.map((villager) => ({
       id: villager.villagerId,
       tradeId: villager.tradeId,
@@ -226,6 +227,7 @@ export function fromSnapshot(snapshot: VillageSnapshot): VillageState {
       ]),
     ),
     builtBuildingIds: snapshot.builtBuildingIds,
+    constructionSites: snapshot.constructionSites,
     storytellerStyle: snapshot.clock.storytellerStyle as VillageState['storytellerStyle'],
     chronicle: snapshot.chronicle.map((entry) => ({
       minute: entry.minute,

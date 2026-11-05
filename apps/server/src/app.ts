@@ -86,6 +86,8 @@ const updateSettingsSchema = z
 const BUDGET_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const setSpeedSchema = z.object({ speed: clockSpeedSchema });
 const decideSchema = z.object({ decision: z.enum(['approved', 'declined']) });
+/** The owner asks for a building to go up. */
+const buildSchema = z.object({ buildingId: z.string().min(1) });
 /** A finished work-along session. */
 const focusSessionSchema = z.object({ minutes: z.number().int() });
 /** A note the owner pins on the board. */
@@ -200,6 +202,16 @@ export async function createApp(options: CreateAppOptions = {}) {
   const villagerExists = (id: string) =>
     village.state.villagers.some((villager) => villager.villagerId === id);
 
+  /** Spec section 14's Villagers page: everyone's card at once, in roster order. */
+  app.get('/api/villagers', (c) =>
+    c.json({
+      villagers: village.state.villagers.flatMap((villager) => {
+        const card = villagerCard(village.state, villager.villagerId);
+        return card ? [card] : [];
+      }),
+    }),
+  );
+
   /** Spec section 14's villager card: needs, mood, relationships, memories, promises. */
   app.get('/api/villagers/:id', (c) => {
     const id = c.req.param('id');
@@ -224,6 +236,25 @@ export async function createApp(options: CreateAppOptions = {}) {
       return c.json({ error: error instanceof Error ? error.message : String(error) }, 409);
     }
     return c.json(villagerCard(village.state, id));
+  });
+
+  /**
+   * The owner's own building: the same `ProposeBuilding` command the
+   * Mayor uses. A refusal (unknown, already built, too few villagers, not
+   * enough coins or materials) changes nothing and comes back as 409.
+   */
+  app.post('/api/buildings', async (c) => {
+    const body: unknown = await c.req.json().catch(() => null);
+    const parsed = buildSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: 'buildingId is required' }, 400);
+    }
+    try {
+      await village.act({ kind: 'ProposeBuilding', buildingId: parsed.data.buildingId });
+    } catch (error) {
+      return c.json({ error: error instanceof Error ? error.message : String(error) }, 409);
+    }
+    return c.json({ ok: true });
   });
 
   /** Spec section 15's work-along: the owner finished a focus session, and the village cheers. */

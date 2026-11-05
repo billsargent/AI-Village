@@ -15,7 +15,7 @@ describe('planInteriorDraw', () => {
   });
 
   it('returns undefined for a building with no furnished layout', () => {
-    expect(planInteriorDraw('smithy')).toBeUndefined();
+    expect(planInteriorDraw('clocktower')).toBeUndefined();
   });
 
   it("tags town-hall's bookshelf, chest and book with their furniture kinds", () => {
@@ -35,6 +35,9 @@ describe('planInteriorDraw', () => {
     expect(planInteriorDraw('post-office')).toBeDefined();
     expect(planInteriorDraw('shop')).toBeDefined();
     expect(planInteriorDraw('forest-hut')).toBeDefined();
+    for (const id of ['bakery', 'mill', 'workshop', 'smithy', 'smokehouse', 'chapel'] as const) {
+      expect(planInteriorDraw(id)).toBeDefined();
+    }
   });
 });
 
@@ -48,7 +51,18 @@ describe('the room round the furniture', () => {
       r.y + r.height <= outer.y + outer.height;
 
   it('has a back wall above the floor, and the furniture and people on the floor', () => {
-    for (const id of ['cottage', 'town-hall', 'shop', 'forest-hut'] as const) {
+    for (const id of [
+      'cottage',
+      'town-hall',
+      'shop',
+      'forest-hut',
+      'bakery',
+      'mill',
+      'workshop',
+      'smithy',
+      'smokehouse',
+      'chapel',
+    ] as const) {
       const plan = planInteriorDraw(id);
       if (!plan) {
         throw new Error(`no plan for ${id}`);
@@ -101,14 +115,14 @@ describe('the room round the furniture', () => {
 
 describe('buildingsWithInteriors', () => {
   it('lists only built buildings that have a furnished layout', () => {
-    expect(buildingsWithInteriors(['cottage', 'smithy', 'town-hall'])).toEqual([
+    expect(buildingsWithInteriors(['cottage', 'clocktower', 'town-hall'])).toEqual([
       'cottage',
       'town-hall',
     ]);
   });
 
   it('is empty when nothing built has a layout', () => {
-    expect(buildingsWithInteriors(['smithy', 'bakery'])).toEqual([]);
+    expect(buildingsWithInteriors(['clocktower', 'gardens'])).toEqual([]);
   });
 
   it("doesn't repeat a multi-instance building id twice", () => {

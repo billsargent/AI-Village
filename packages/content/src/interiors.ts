@@ -36,6 +36,16 @@ export const PLANT = insideTileRect(0, 12, 1, 1);
 export const CHEST = insideTileRect(1, 16, 1, 1);
 /** A single standing closed book, for spec section 9's "almanac". */
 export const BOOK = insideTileRect(0, 15, 1, 1);
+/** A long plain table with no drawers: a counter, a workbench, an altar. */
+export const LONG_TABLE = insideTileRect(2, 14, 2, 2);
+/** A backless stool, red-cushioned. */
+export const STOOL = insideTileRect(4, 15, 1, 1);
+/** The blue chair, for the chapel's rows. */
+export const CHAIR_BLUE = insideTileRect(6, 14, 1, 1);
+/** A small cabinet with a clock on top. */
+export const CABINET = insideTileRect(3, 16, 1, 2);
+/** The same cabinet with a blue clock. */
+export const CABINET_BLUE = insideTileRect(4, 16, 1, 2);
 
 /**
  * What a picked furniture sprite actually is, independent of which
@@ -53,7 +63,9 @@ export type FurnitureKind =
   | 'rug'
   | 'plant'
   | 'chest'
-  | 'book';
+  | 'book'
+  | 'stool'
+  | 'cabinet';
 
 const KIND_BY_SPRITE = new Map<SpriteFrame, FurnitureKind>([
   [BED, 'bed'],
@@ -68,6 +80,11 @@ const KIND_BY_SPRITE = new Map<SpriteFrame, FurnitureKind>([
   [PLANT, 'plant'],
   [CHEST, 'chest'],
   [BOOK, 'book'],
+  [LONG_TABLE, 'table'],
+  [STOOL, 'stool'],
+  [CHAIR_BLUE, 'chair'],
+  [CABINET, 'cabinet'],
+  [CABINET_BLUE, 'cabinet'],
 ]);
 
 /** The kind of a sprite picked above, for code that cares what a piece of furniture *is*, not just how to draw it. */
@@ -155,6 +172,64 @@ export const INTERIOR_LAYOUTS: Partial<Record<BuildingId, readonly InteriorItem[
     { sprite: BOOKSHELF, x: 5, y: 0 },
     { sprite: RUG_SMALL, x: 0, y: 3 },
     { sprite: PLANT, x: 7, y: 0 },
+  ],
+  bakery: [
+    { sprite: LONG_TABLE, x: 0, y: 0 },
+    { sprite: LONG_TABLE, x: 2, y: 0 },
+    { sprite: CHEST, x: 5, y: 0 },
+    { sprite: CHEST, x: 6, y: 0 },
+    { sprite: CABINET, x: 7, y: 0 },
+    { sprite: STOOL, x: 1, y: 2 },
+    { sprite: STOOL, x: 3, y: 2 },
+    { sprite: PLANT, x: 6, y: 2 },
+  ],
+  mill: [
+    { sprite: CHEST, x: 0, y: 0 },
+    { sprite: CHEST, x: 1, y: 0 },
+    { sprite: CHEST, x: 2, y: 0 },
+    { sprite: CHEST, x: 0, y: 1 },
+    { sprite: LONG_TABLE, x: 4, y: 0 },
+    { sprite: STOOL, x: 4, y: 2 },
+    { sprite: CABINET, x: 7, y: 0 },
+    { sprite: RUG_SMALL, x: 1, y: 3 },
+  ],
+  workshop: [
+    { sprite: TABLE, x: 0, y: 0 },
+    { sprite: CHAIR, x: 0, y: 2 },
+    { sprite: LONG_TABLE, x: 3, y: 0 },
+    { sprite: STOOL, x: 3, y: 2 },
+    { sprite: STOOL, x: 4, y: 2 },
+    { sprite: CHEST, x: 6, y: 0 },
+    { sprite: CHEST, x: 7, y: 0 },
+    { sprite: CHEST, x: 7, y: 1 },
+  ],
+  smithy: [
+    { sprite: LONG_TABLE, x: 0, y: 0 },
+    { sprite: STOOL, x: 1, y: 2 },
+    { sprite: CHEST, x: 3, y: 0 },
+    { sprite: CHEST, x: 4, y: 0 },
+    { sprite: CABINET_BLUE, x: 6, y: 0 },
+    { sprite: RUG_SMALL, x: 3, y: 3 },
+  ],
+  smokehouse: [
+    { sprite: LONG_TABLE, x: 0, y: 0 },
+    { sprite: LONG_TABLE, x: 3, y: 0 },
+    { sprite: CHEST, x: 6, y: 0 },
+    { sprite: CHEST, x: 6, y: 1 },
+    { sprite: STOOL, x: 0, y: 2 },
+    { sprite: STOOL, x: 4, y: 2 },
+  ],
+  chapel: [
+    { sprite: PLANT, x: 1, y: 0 },
+    { sprite: LONG_TABLE, x: 3, y: 0 },
+    { sprite: PLANT, x: 6, y: 0 },
+    { sprite: CHAIR_BLUE, x: 0, y: 3 },
+    { sprite: CHAIR_BLUE, x: 1, y: 3 },
+    { sprite: CHAIR_BLUE, x: 2, y: 3 },
+    { sprite: RUG_SMALL, x: 3, y: 3 },
+    { sprite: CHAIR_BLUE, x: 5, y: 3 },
+    { sprite: CHAIR_BLUE, x: 6, y: 3 },
+    { sprite: CHAIR_BLUE, x: 7, y: 3 },
   ],
   'forest-hut': [
     { sprite: BED, x: 0, y: 0 },

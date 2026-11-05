@@ -45,6 +45,7 @@ const SAMPLE_SNAPSHOT: VillageSnapshot = {
     savedAtRealMs: 1_700_000_000_000,
   },
   builtBuildingIds: ['town-hall', 'fields', 'fields'],
+  constructionSites: [{ buildingId: 'mill', finishesOnDay: 4 }],
   villagers: [
     {
       id: 'ada',

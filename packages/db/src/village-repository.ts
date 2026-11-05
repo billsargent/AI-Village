@@ -122,9 +122,16 @@ export interface WorkRequestRow {
   requestedMinute: number;
 }
 
+export interface ConstructionSiteRow {
+  buildingId: string;
+  finishesOnDay: number;
+}
+
 export interface VillageSnapshot {
   clock: ClockRow;
   builtBuildingIds: readonly string[];
+  /** Buildings still going up, in the order they were started. */
+  constructionSites: readonly ConstructionSiteRow[];
   villagers: readonly VillagerRow[];
   needs: readonly NeedsRow[];
   relationships: readonly RelationshipRow[];
@@ -148,10 +155,12 @@ export async function saveVillage(db: Database, snapshot: VillageSnapshot): Prom
     await tx.insert(schema.clock).values({ id: CLOCK_ROW_ID, ...snapshot.clock });
 
     await tx.delete(schema.builtBuildings);
-    if (snapshot.builtBuildingIds.length > 0) {
-      await tx
-        .insert(schema.builtBuildings)
-        .values(snapshot.builtBuildingIds.map((buildingId) => ({ buildingId })));
+    const buildingRows = [
+      ...snapshot.builtBuildingIds.map((buildingId) => ({ buildingId, finishesOnDay: null })),
+      ...snapshot.constructionSites.map((site) => ({ ...site })),
+    ];
+    if (buildingRows.length > 0) {
+      await tx.insert(schema.builtBuildings).values(buildingRows);
     }
 
     await tx.delete(schema.villagers);
@@ -243,7 +252,11 @@ export async function loadVillage(db: Database): Promise<VillageSnapshot | null>
     return null;
   }
 
-  const builtBuildingRows = await db.select().from(schema.builtBuildings).all();
+  const builtBuildingRows = await db
+    .select()
+    .from(schema.builtBuildings)
+    .orderBy(schema.builtBuildings.id)
+    .all();
   const villagerRows = await db.select().from(schema.villagers).all();
   // In the order they were saved: a villager's traits are listed as given.
   const traitRows = await db
@@ -280,7 +293,14 @@ export async function loadVillage(db: Database): Promise<VillageSnapshot | null>
       daysSinceLastHappening: clockRow.daysSinceLastHappening,
       savedAtRealMs: clockRow.savedAtRealMs,
     },
-    builtBuildingIds: builtBuildingRows.map((row) => row.buildingId),
+    builtBuildingIds: builtBuildingRows
+      .filter((row) => row.finishesOnDay === null)
+      .map((row) => row.buildingId),
+    constructionSites: builtBuildingRows.flatMap((row) =>
+      row.finishesOnDay === null
+        ? []
+        : [{ buildingId: row.buildingId, finishesOnDay: row.finishesOnDay }],
+    ),
     villagers: villagerRows.map((row) => ({ ...row, traits: traitsByVillager.get(row.id) ?? [] })),
     needs: needsRows,
     relationships: relationshipRows,

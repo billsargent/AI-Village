@@ -51,6 +51,8 @@ export interface VillageFacts {
   festivals: readonly Festival[];
   /** The newest notes on the notice board, newest first. */
   boardPosts: readonly { author: string; text: string; postedDay: number }[];
+  /** Buildings going up: which copy (`slot`) and how many days are left. */
+  constructionSites: readonly { buildingId: string; slot: number; daysLeft: number }[];
 }
 
 async function fetchVillageFacts(): Promise<VillageFacts> {
@@ -406,6 +408,31 @@ export function useThankVillager() {
       postJson(`/api/villagers/${encodeURIComponent(villagerId)}/thank`),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['villager'] });
+      void queryClient.invalidateQueries({ queryKey: ['village'] });
+    },
+  });
+}
+
+/** Spec section 14's Villagers page: everyone's card. */
+export function useVillagerCards() {
+  return useQuery({
+    queryKey: ['villager', 'all'],
+    queryFn: async () => {
+      const response = await fetch('/api/villagers');
+      if (!response.ok) {
+        throw new Error(`GET /api/villagers failed: ${response.status}`);
+      }
+      return ((await response.json()) as { villagers: VillagerCard[] }).villagers;
+    },
+  });
+}
+
+/** The owner starts a building: the same command the Mayor uses. */
+export function useBuild() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (buildingId: string) => postJson('/api/buildings', { buildingId }),
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['village'] });
     },
   });

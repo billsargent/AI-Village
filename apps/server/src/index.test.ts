@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PROPOSE_HIRE_TOOL, type ModelClient } from '@ai-village/agent';
 import { createApp } from './app.js';
+import { getBalance } from '@ai-village/sim';
 
 const tempDirs: string[] = [];
 const closers: (() => Promise<void>)[] = [];
@@ -773,6 +774,33 @@ describe("the owner's own actions", () => {
     expect(((await again.json()) as { error: string }).error).toBe(
       'ada has already been thanked today',
     );
+  });
+
+  it('lets the owner start a building, which goes up as a site, and refuses what it cannot build', async () => {
+    const { app, village } = await createLiveTestApp();
+    const coins = getBalance(village.state.ledger, 'treasury', 'coins');
+    const response = await postJson(app, '/api/buildings', { buildingId: 'fields' });
+    expect(response.status).toBe(200);
+    const facts = (await (await app.request('/api/village')).json()) as {
+      constructionSites: { buildingId: string; daysLeft: number }[];
+      treasuryCoins: number;
+    };
+    expect(facts.constructionSites).toEqual([{ buildingId: 'fields', slot: 0, daysLeft: 1 }]);
+    expect(facts.treasuryCoins).toBe(coins - 10);
+
+    const refused = await postJson(app, '/api/buildings', { buildingId: 'town-hall' });
+    expect(refused.status).toBe(409);
+    expect(((await refused.json()) as { error: string }).error).toContain('already built');
+    expect((await postJson(app, '/api/buildings', {})).status).toBe(400);
+  });
+
+  it("lists every villager's card for the Villagers page", async () => {
+    const { app } = await createLiveTestApp();
+    const body = (await (await app.request('/api/villagers')).json()) as {
+      villagers: { id: string; traits: string[] }[];
+    };
+    expect(body.villagers.map((card) => card.id)).toEqual(['hesper', 'ada']);
+    expect(body.villagers[0]?.traits.length).toBeGreaterThan(0);
   });
 
   it('records a finished work-along session in the chronicle', async () => {

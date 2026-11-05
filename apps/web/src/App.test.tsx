@@ -39,6 +39,7 @@ const FACTS: VillageFacts = {
     { name: 'Lantern Night', season: 'winter', seasonDay: 14 },
   ],
   boardPosts: [{ author: 'hesper', text: 'Fresh bread at the bakery today.', postedDay: 0 }],
+  constructionSites: [],
 };
 
 function urlOf(input: RequestInfo | URL): string {
@@ -62,7 +63,15 @@ function fetchServing(
         ? { pending: [], decided: [] }
         : url.includes('/api/clock')
           ? { speed: 1, paused: false }
-          : facts;
+          : url.includes('/api/settings')
+            ? {
+                hasDeepseekApiKey: false,
+                mayorAutonomy: false,
+                monthlyCeilingUsd: null,
+                spentThisMonthUsd: 0,
+                mayorLastTurn: null,
+              }
+            : facts;
     // A handler can answer with a whole Response, for an error status.
     if (body instanceof Response) {
       return Promise.resolve(body);
@@ -262,6 +271,7 @@ describe('App', () => {
   });
 
   it("doesn't offer a look-inside button for a building with no furnished layout", async () => {
+    vi.stubGlobal('fetch', fetchServing({ ...FACTS, builtBuildingIds: ['gardens'] }));
     renderApp();
 
     await screen.findByLabelText(/Moonday, spring day 1/);

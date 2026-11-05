@@ -55,6 +55,8 @@ export interface FactsSnapshot {
   festivals: readonly Festival[];
   /** The newest notes on the village notice board, newest first. */
   boardPosts: readonly { author: string; text: string; postedDay: number }[];
+  /** Buildings going up: which copy (`slot`, as plots are numbered) and how many days are left. */
+  constructionSites: readonly { buildingId: string; slot: number; daysLeft: number }[];
 }
 
 const VILLAGE_ACCOUNT = 'village';
@@ -132,6 +134,15 @@ export function facts(state: VillageState, _viewer: string, _purpose: string): F
       .slice(-BOARD_POSTS_LIMIT)
       .reverse()
       .map((post) => ({ author: post.author, text: post.text, postedDay: post.postedDay })),
+    constructionSites: state.constructionSites.map((site, index) => ({
+      buildingId: site.buildingId,
+      // Plots are numbered in build order: after every finished copy, and any site started earlier.
+      slot:
+        state.builtBuildingIds.filter((id) => id === site.buildingId).length +
+        state.constructionSites.slice(0, index).filter((s) => s.buildingId === site.buildingId)
+          .length,
+      daysLeft: Math.max(1, site.finishesOnDay - date.absoluteDay),
+    })),
   };
 }
 
@@ -161,6 +172,14 @@ export function renderFacts(snapshot: FactsSnapshot): string {
   lines.push(
     `Buildings: ${snapshot.builtBuildingIds.length > 0 ? snapshot.builtBuildingIds.join(', ') : 'none built yet'}`,
   );
+
+  if (snapshot.constructionSites.length > 0) {
+    const sites = snapshot.constructionSites.map(
+      (site) =>
+        `${site.buildingId} (${site.daysLeft} ${site.daysLeft === 1 ? 'day' : 'days'} left)`,
+    );
+    lines.push(`Being built: ${sites.join(', ')}`);
+  }
 
   const storeEntries = Object.entries(snapshot.stores);
   const stores =
