@@ -38,6 +38,7 @@ const FACTS: VillageFacts = {
     { name: 'Harvest Festival', season: 'autumn', seasonDay: 10 },
     { name: 'Lantern Night', season: 'winter', seasonDay: 14 },
   ],
+  boardPosts: [{ author: 'hesper', text: 'Fresh bread at the bakery today.', postedDay: 0 }],
 };
 
 function urlOf(input: RequestInfo | URL): string {
@@ -97,6 +98,7 @@ describe('App', () => {
     expect(screen.getByText('Population: 2')).toBeTruthy();
     expect(screen.getByLabelText('Treasury: 40 coins')).toBeTruthy();
     expect(screen.getByText('The market opened for the day.')).toBeTruthy();
+    expect(screen.getByText(/Fresh bread at the bakery today\./)).toBeTruthy();
     expect(screen.getByText('Hesper is in the bakery')).toBeTruthy();
   });
 
@@ -151,12 +153,14 @@ describe('App', () => {
 
     await screen.findByLabelText(/Moonday, spring day 1/);
     expect(screen.getByText('The market opened for the day.')).toBeTruthy();
+    expect(screen.getByText(/Fresh bread at the bakery today\./)).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Journal' }));
     expect(screen.queryByText('The market opened for the day.')).toBeFalsy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Journal' }));
     expect(screen.getByText('The market opened for the day.')).toBeTruthy();
+    expect(screen.getByText(/Fresh bread at the bakery today\./)).toBeTruthy();
   });
 
   it("shows a hint to click town-hall's bookshelf, chest and book, but no panels yet", async () => {
@@ -521,7 +525,7 @@ describe('the villager card', () => {
     mood: 63,
     relationships: [{ villagerId: 'ada', label: 'close-friend', affinity: 70, familiarity: 90 }],
     memories: [{ text: "The owner's favourite food is plum jam", about: 'owner' }],
-    promises: [{ text: 'Save a loaf for the owner', daysLeft: 1 }],
+    promises: [{ id: 7, text: 'Save a loaf for the owner', daysLeft: 1 }],
   };
 
   it('opens from the People list with needs, mood, friends, memories and promises, then goes to chat', async () => {
@@ -556,5 +560,54 @@ describe('the villager card', () => {
     );
     expect(await screen.findByText('Say hello to Hesper.')).toBeTruthy();
     expect(screen.queryByText('Mood: Content (63)')).toBeNull();
+  });
+});
+
+describe("the villager card's buttons", () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('thanks a villager, and marks a promise kept', async () => {
+    const posts: { url: string; body: unknown }[] = [];
+    vi.stubGlobal(
+      'fetch',
+      fetchServing(FACTS, {
+        '/api/villagers/hesper/thank': (init) => {
+          posts.push({ url: 'thank', body: JSON.parse(init?.body as string) });
+          return {};
+        },
+        '/api/promises/7': (init) => {
+          posts.push({ url: 'promise', body: JSON.parse(init?.body as string) });
+          return { ok: true };
+        },
+        '/api/villagers/hesper': () => ({
+          id: 'hesper',
+          tradeId: 'baker',
+          role: 'villager',
+          skillLevel: 1,
+          traits: [],
+          needs: null,
+          mood: null,
+          relationships: [],
+          memories: [],
+          promises: [{ id: 7, text: 'Save a loaf for the owner', daysLeft: 1 }],
+        }),
+      }),
+    );
+    renderApp();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'About Hesper' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Thank Hesper' }));
+    expect(await screen.findByText('Hesper looks pleased.')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Kept: Save a loaf for the owner' }));
+    await waitFor(() => {
+      expect(posts).toEqual([
+        { url: 'thank', body: {} },
+        { url: 'promise', body: { decision: 'kept' } },
+      ]);
+    });
   });
 });

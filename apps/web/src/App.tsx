@@ -1,6 +1,7 @@
 import type { BuildingId, FurnitureKind, MapId } from '@ai-village/content';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ChatPanel } from './ChatPanel.js';
+import { lightAt, lightWord } from './light.js';
 import { VillagerCardPanel } from './VillagerCardPanel.js';
 import { buildingsWithInteriors } from './interior-draw.js';
 import { InteriorCanvas } from './InteriorCanvas.js';
@@ -236,6 +237,15 @@ export function App() {
         />
       </div>
 
+      {/* Spec section 10's light: the map is multiplied by the hour's tint; panels sit above it. */}
+      <div
+        aria-hidden="true"
+        data-testid="light"
+        data-light={lightWord(data.hour)}
+        className="pointer-events-none absolute inset-0 z-[5] mix-blend-multiply transition-colors duration-1000 motion-reduce:transition-none"
+        style={{ backgroundColor: `rgb(${lightAt(data.hour, data.minuteOfHour).join(' ')})` }}
+      />
+
       {/* Top left: the village's name, its size, and the maps. */}
       <div className="pointer-events-none absolute top-3 left-3 z-10 flex flex-col gap-2">
         <h1 className="map-text text-4xl leading-none">AI-Village</h1>
@@ -361,6 +371,24 @@ export function App() {
                 </ul>
               ) : (
                 <p className="text-sm text-ink-soft">Nobody lives here yet.</p>
+              )}
+            </section>
+            <section>
+              <h2 className="text-lg">Notice board</h2>
+              {data.boardPosts.length > 0 ? (
+                <ul className="flex flex-col gap-1 text-sm">
+                  {data.boardPosts.map((post, index) => (
+                    <li
+                      key={`${post.postedDay}-${index}`}
+                      className="border-l-4 border-parchment-dark pl-2"
+                    >
+                      "{post.text}"{' '}
+                      <span className="text-ink-soft">- {capitalise(post.author)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-ink-soft">Nothing pinned up yet.</p>
               )}
             </section>
             <section>

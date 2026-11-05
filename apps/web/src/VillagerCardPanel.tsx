@@ -1,6 +1,11 @@
 import { spriteForVillager } from '@ai-village/content';
 import { useEffect, useRef } from 'react';
-import { useVillagerCard, type VillagerCard } from './village-api.js';
+import {
+  useDecidePromise,
+  useThankVillager,
+  useVillagerCard,
+  type VillagerCard,
+} from './village-api.js';
 
 function capitalise(word: string): string {
   return word.charAt(0).toUpperCase() + word.slice(1);
@@ -112,6 +117,8 @@ export function VillagerCardPanel({
   onChat: () => void;
 }) {
   const { data: card, isPending, isError } = useVillagerCard(villagerId);
+  const thank = useThankVillager();
+  const decidePromise = useDecidePromise();
   const name = capitalise(villagerId);
 
   if (isPending) {
@@ -148,9 +155,22 @@ export function VillagerCardPanel({
               Mood: {moodWord(card.mood)} ({card.mood})
             </p>
           )}
-          <button type="button" className="wood-button mt-1 self-start" onClick={onChat}>
-            Chat with {name}
-          </button>
+          <div className="mt-1 flex gap-1">
+            <button type="button" className="wood-button" onClick={onChat}>
+              Chat with {name}
+            </button>
+            <button
+              type="button"
+              className="wood-button"
+              disabled={thank.isPending}
+              onClick={() => {
+                thank.mutate(villagerId);
+              }}
+            >
+              Thank {name}
+            </button>
+          </div>
+          {thank.isSuccess && <p className="text-sm">{name} looks pleased.</p>}
         </div>
       </div>
 
@@ -196,14 +216,36 @@ export function VillagerCardPanel({
         <h3 className="text-lg">Promises to you</h3>
         {card.promises.length > 0 ? (
           <ul className="list-disc pl-5 text-sm">
-            {card.promises.map((promise, index) => (
-              <li key={index}>
+            {card.promises.map((promise) => (
+              <li key={promise.id} className="flex flex-wrap items-center gap-1">
                 {promise.text} -{' '}
                 {promise.daysLeft < 0
                   ? 'overdue'
                   : promise.daysLeft === 0
                     ? 'due today'
                     : `due in ${promise.daysLeft} day${promise.daysLeft === 1 ? '' : 's'}`}
+                <button
+                  type="button"
+                  className="wood-button text-xs"
+                  disabled={decidePromise.isPending}
+                  aria-label={`Kept: ${promise.text}`}
+                  onClick={() => {
+                    decidePromise.mutate({ promiseId: promise.id, decision: 'kept' });
+                  }}
+                >
+                  Kept
+                </button>
+                <button
+                  type="button"
+                  className="wood-button text-xs"
+                  disabled={decidePromise.isPending}
+                  aria-label={`Let them off: ${promise.text}`}
+                  onClick={() => {
+                    decidePromise.mutate({ promiseId: promise.id, decision: 'released' });
+                  }}
+                >
+                  Let them off
+                </button>
               </li>
             ))}
           </ul>

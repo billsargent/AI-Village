@@ -333,3 +333,13 @@
   villagers nap through about 1 stint in 5, unpaid, with a private chronicle
   line. Cheerful villagers' friendships grow 25% faster, and grumpy ones'
   25% slower (#168).
+- Chats with villagers are saved (a new `chat_lines` table), so a
+  conversation and its history for the next turn survive a restart (#170).
+- The notice board: the newest posts are in the facts (so villagers know
+  them) and in the journal. Settings shows what the Mayor said at the end of
+  their morning (#171).
+- Villager card actions: Thank lifts their fun and they remember it, and each
+  open promise has Kept and Let them off buttons (#172).
+- Day and night light: the map is tinted amber at dawn, violet at dusk and
+  deep blue at night (about 45% brightness), blending smoothly. Panels and
+  dialogs are never tinted (#173).

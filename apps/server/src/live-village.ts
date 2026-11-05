@@ -19,6 +19,7 @@ import {
   type Database,
 } from '@ai-village/db';
 import {
+  apply,
   catchUpLiveClock,
   clockSettingsSchema,
   setClockSpeed,
@@ -26,6 +27,7 @@ import {
   tickLiveClock,
   type ClockSettings,
   type ClockSpeed,
+  type Command,
   type DayReport,
   type VillageState,
 } from '@ai-village/sim';
@@ -236,6 +238,20 @@ export class LiveVillage {
       } finally {
         this.turnRunning = false;
       }
+      await this.save();
+      this.notify({ settled: [] });
+    });
+  }
+
+  /**
+   * One of the owner's own actions on the village - thanking a villager,
+   * deciding a promise - run through the sim's `apply()` in turn with
+   * everything else. A refused command (a `CommandError`) changes nothing
+   * and is thrown for the caller to report.
+   */
+  act(command: Command): Promise<void> {
+    return this.serially(async () => {
+      this.current = apply(this.current, command).state;
       await this.save();
       this.notify({ settled: [] });
     });

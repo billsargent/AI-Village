@@ -193,3 +193,16 @@ export const chronicle = sqliteTable('chronicle', {
   importance: integer('importance').notNull(),
   public: integer('public', { mode: 'boolean' }).notNull(),
 });
+
+/**
+ * The owner's chats with villagers (spec section 11's "Chat with the owner"), one
+ * row per line, so a conversation survives a restart. A plain stand-in for spec
+ * section 4's 	urns/	urn_steps until other kinds of turn are logged too.
+ */
+export const chatLines = sqliteTable('chat_lines', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  villagerId: text('villager_id').notNull(),
+  speaker: text('speaker').notNull(),
+  text: text('text').notNull(),
+  at: real('at').notNull(),
+});
