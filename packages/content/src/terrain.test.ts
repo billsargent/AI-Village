@@ -9,6 +9,8 @@ import {
   groundGrid,
   groundTileAt,
   groundTiles,
+  isBloom,
+  isFoliage,
   plotKey,
   roadsOnMap,
   waterOnMap,
@@ -175,5 +177,17 @@ describe('groundTiles and decor', () => {
         expect(sprite.y + sprite.height).toBeLessThanOrEqual(height);
       }
     }
+  });
+});
+
+describe('isFoliage and isBloom', () => {
+  it('pick out the trees and bushes, and the flowers, from the decor the seasons change', () => {
+    const decor = decorFor('main');
+    const foliage = decor.filter((item) => isFoliage(item.sprite));
+    const blooms = decor.filter((item) => isBloom(item.sprite));
+    expect(foliage.length).toBeGreaterThan(0);
+    expect(blooms.length).toBeGreaterThan(0);
+    expect(foliage.every((item) => item.layer === 'object')).toBe(true);
+    expect(blooms.every((item) => item.layer === 'ground')).toBe(true);
   });
 });

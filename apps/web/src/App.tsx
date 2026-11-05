@@ -1,8 +1,8 @@
 import type { BuildingId, FurnitureKind, MapId } from '@ai-village/content';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChatPanel } from './ChatPanel.js';
-import { indoorLightAt, lightAt, lightWord } from './light.js';
 import { VillagerCardPanel } from './VillagerCardPanel.js';
+import { walkPace } from './atmosphere.js';
 import { buildingsWithInteriors } from './interior-draw.js';
 import { InboxPanel } from './InboxPanel.js';
 import { SettingsPanel } from './SettingsPanel.js';
@@ -177,6 +177,7 @@ export function App() {
   const [chatWith, setChatWith] = useState<string | null>(null);
   const [cardFor, setCardFor] = useState<string | null>(null);
   const pendingApprovals = usePendingApprovalCount();
+  const { data: clockStatus } = useClockStatus();
   const firstVillagerId = data?.villagers[0]?.id ?? null;
   const overlayOpen = showSettings || showInbox || chatWith !== null || cardFor !== null;
 
@@ -256,6 +257,7 @@ export function App() {
             enterRoom({ buildingId: buildingId as BuildingId, slot });
           }}
           room={room}
+          pace={walkPace(clockStatus, data.weather)}
           interactiveKinds={
             room?.buildingId === 'town-hall'
               ? TOWN_HALL_INTERACTIVE_KINDS
@@ -279,18 +281,6 @@ export function App() {
           }}
         />
       </div>
-
-      {/* Spec section 10's light: the map is multiplied by the hour's tint; panels sit above it. */}
-      <div
-        aria-hidden="true"
-        data-testid="light"
-        data-light={lightWord(data.hour)}
-        data-indoors={room ? 'true' : 'false'}
-        className="pointer-events-none absolute inset-0 z-[5] mix-blend-multiply transition-colors duration-1000 motion-reduce:transition-none"
-        style={{
-          backgroundColor: `rgb(${(room ? indoorLightAt : lightAt)(data.hour, data.minuteOfHour).join(' ')})`,
-        }}
-      />
 
       {/* Stepping through a door: a moment of dark, then the other side. */}
       {doorways > 0 && (

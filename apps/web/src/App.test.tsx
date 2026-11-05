@@ -136,13 +136,13 @@ describe('App', () => {
     expect(inside.textContent).toContain('Nobody is in.');
     expect(screen.queryByRole('dialog')).toBeFalsy();
     expect(screen.getByTestId('village-canvas')).toBeTruthy();
-    expect(screen.getByTestId('light').dataset.indoors).toBe('true');
+    expect(screen.getByTestId('village-canvas').dataset.indoors).toBe('true');
     expect(screen.getByRole('group', { name: 'Maps', hidden: true }).className).toContain('hidden');
 
     fireEvent.click(screen.getByText('Back to village'));
 
     expect(screen.queryByRole('region', { name: 'Inside the Cottage' })).toBeFalsy();
-    expect(screen.getByTestId('light').dataset.indoors).toBe('false');
+    expect(screen.getByTestId('village-canvas').dataset.indoors).toBe('false');
   });
 
   it('leaves a room with Escape', async () => {
