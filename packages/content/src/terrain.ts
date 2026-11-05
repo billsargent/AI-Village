@@ -80,6 +80,27 @@ const BUSH = tile(7, 12);
 const ROCKS = [tile(0, 15), tile(1, 15), tile(2, 15)];
 const FLOWERS = [tile(2, 12), tile(3, 12), tile(4, 12), tile(5, 12), tile(6, 12)];
 const DAISIES = [tile(2, 13), tile(2, 14)];
+/** Trees and bushes: what turns amber in autumn and frosts over in winter. */
+const FOLIAGE: ReadonlySet<SpriteFrame> = new Set([
+  ...GREEN_TREES,
+  ...TEAL_TREES,
+  SMALL_TREE,
+  BUSH,
+]);
+
+/** Whether a decor sprite is a tree or bush, for the season's colours. */
+export function isFoliage(sprite: SpriteFrame): boolean {
+  return FOLIAGE.has(sprite);
+}
+
+/** Flowers and daisies: what winter puts away. */
+const BLOOMS: ReadonlySet<SpriteFrame> = new Set([...FLOWERS, ...DAISIES]);
+
+/** Whether a decor sprite is a flower or daisy. */
+export function isBloom(sprite: SpriteFrame): boolean {
+  return BLOOMS.has(sprite);
+}
+
 const SIGNPOST = tile(8, 13);
 const SIGNPOST_RIGHT = tile(8, 14);
 

@@ -355,3 +355,15 @@
   owner (#177).
 - Thanking counts once a day per villager. A second thanks is refused, and
   the card says so (#178).
+- Night lights: the day/night tint now comes from the map's renderer, and
+  every lived-in building's windows and door glow warm from 19:00 to dawn,
+  shining through the dark rather than being dimmed by it (#180).
+- Seasons: pink petals drift in spring, trees turn orange and the grass gold
+  in autumn with falling leaves, and in winter the ground and paths lie under
+  snow, the trees are frosted and the flowers are gone. These are palette
+  swaps of the same art, not new drawings (#181).
+- Weather on the map: rain (with a darker tint), heavier rain in storms,
+  falling snow, a fog layer, and petals or leaves blown faster in wind.
+  Nothing shows indoors, and nothing moves under reduced motion (#182).
+- Villagers walk at the clock's pace: they stop while it's paused, walk 1.6x
+  as fast at 2x and 2.5x at 4x, and 20% slower in snow (#183).

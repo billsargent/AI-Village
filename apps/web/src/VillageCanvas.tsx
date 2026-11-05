@@ -2,6 +2,8 @@ import {
   BACK_WALL,
   FLOORBOARDS,
   GRASS_TILE,
+  isBloom,
+  isFoliage,
   TILE_PX,
   WALL_TOP_COLOR,
   walkGrid,
@@ -9,8 +11,28 @@ import {
   type FurnitureKind,
   type MapId,
 } from '@ai-village/content';
-import { Application, Container, Graphics, Sprite, TilingSprite } from 'pixi.js';
+import {
+  Application,
+  ColorMatrixFilter,
+  Container,
+  Graphics,
+  Rectangle,
+  Sprite,
+  Texture,
+  TilingSprite,
+} from 'pixi.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  dimmed,
+  glowsFor,
+  glowStrength,
+  particlesNow,
+  seasonLook,
+  weatherLook,
+  type ColourMatrix,
+} from './atmosphere.js';
+import { AtmosphereLayer, type AtmosphereState } from './atmosphere-layer.js';
+import { indoorLightAt, lightAt, lightWord } from './light.js';
 import { loadFrameTexture } from './load-frame-texture.js';
 import type { VillageFacts } from './village-api.js';
 import { planInteriorDraw, roomZoom } from './interior-draw.js';
@@ -91,6 +113,8 @@ export interface VillageCanvasProps {
   /** Furniture in the room that does something when clicked. Everything else stays inert. */
   interactiveKinds?: ReadonlySet<FurnitureKind> | undefined;
   onFurnitureClick?: ((kind: FurnitureKind) => void) | undefined;
+  /** How fast villagers walk against real time: 0 while the clock is paused (see `walkPace`). */
+  pace?: number | undefined;
   /** Clicking a villager - the app opens a chat with them. */
   onVillagerClick?: ((villagerId: string) => void) | undefined;
 }
@@ -109,6 +133,41 @@ type Hovered =
   | { kind: 'villager'; id: string; where: string }
   | { kind: 'furniture'; id: FurnitureKind };
 
+function matrixFilter(matrix: ColourMatrix): ColorMatrixFilter {
+  const filter = new ColorMatrixFilter();
+  filter.matrix = [...matrix] as ColorMatrixFilter['matrix'];
+  return filter;
+}
+
+/**
+ * A texture redrawn through a season's palette swap, made once per
+ * texture and season and kept, so autumn's trees cost no more to draw
+ * than summer's.
+ */
+function recoloured(
+  app: Application,
+  cache: Map<string, Texture>,
+  texture: Texture,
+  matrix: ColourMatrix,
+  season: string,
+): Texture {
+  const key = `${season}:${texture.uid}`;
+  const cached = cache.get(key);
+  if (cached) {
+    return cached;
+  }
+  const sprite = new Sprite({ texture });
+  sprite.filters = [matrixFilter(matrix)];
+  const made = app.renderer.generateTexture({
+    target: sprite,
+    frame: new Rectangle(0, 0, texture.width, texture.height),
+    textureSourceOptions: { scaleMode: 'nearest' },
+  });
+  sprite.destroy();
+  cache.set(key, made);
+  return made;
+}
+
 function prefersReducedMotion(): boolean {
   return typeof window.matchMedia === 'function'
     ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -118,6 +177,12 @@ function prefersReducedMotion(): boolean {
 /** A live scene for one map: the renderer, and the two layers the village's contents are drawn into. */
 interface Scene {
   app: Application;
+  /** The grass, roads and flat decor: what winter's snow covers. */
+  groundGroup: Container;
+  /** Season-recoloured copies of tree and bush textures, by season and texture. */
+  recoloured: Map<string, Texture>;
+  /** Weather, fog, the hour's tint and the night's lights, over everything. */
+  atmosphere: AtmosphereLayer;
   /** The map, hidden while a room is shown. */
   world: Container;
   /** The room, when there is one, drawn over the dark instead of the map. */
@@ -170,6 +235,7 @@ export function VillageCanvas({
   room = null,
   interactiveKinds,
   onFurnitureClick,
+  pace = 1,
 }: VillageCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const zoomByRef = useRef<((step: number) => void) | null>(null);
@@ -191,8 +257,36 @@ export function VillageCanvas({
   const onFurnitureClickRef = useRef(onFurnitureClick);
   onFurnitureClickRef.current = onFurnitureClick;
   // Read by the map's own input handlers: no panning or zooming the map from inside a room.
-  const insideRef = useRef(room !== null);
-  insideRef.current = room !== null;
+  const inside = room !== null;
+  const insideRef = useRef(inside);
+  insideRef.current = inside;
+  const paceRef = useRef(pace);
+  paceRef.current = pace;
+
+  // The light, the season and the weather, read by the renderer every frame.
+  const season = useMemo(() => seasonLook(data.season), [data.season]);
+  const weather = weatherLook(data.weather);
+  const light = inside
+    ? indoorLightAt(data.hour, data.minuteOfHour)
+    : dimmed(lightAt(data.hour, data.minuteOfHour), weather.dim);
+  const atmosphereRef = useRef<Omit<AtmosphereState, 'zoom' | 'reducedMotion'>>({
+    light,
+    glow: 0,
+    particles: 'none',
+    count: 0,
+    wind: 0,
+    fog: 0,
+    inside,
+  });
+  atmosphereRef.current = {
+    light,
+    glow: glowStrength(data.hour, data.minuteOfHour),
+    particles: particlesNow(season, weather),
+    count: weather.count,
+    wind: weather.wind,
+    fog: weather.fog,
+    inside,
+  };
 
   const key = contentsKey(data, map);
   // Re-planned only when what's standing on the map changes, not on every
@@ -382,16 +476,50 @@ export function VillageCanvas({
       }
       const flatHost = new Container();
       const objectsHost = new Container({ sortableChildren: true });
-      world.addChild(grass, groundLayer, flatHost, objectsHost);
+      const groundGroup = new Container();
+      groundGroup.addChild(grass, groundLayer, flatHost);
+      world.addChild(groundGroup, objectsHost);
       const roomHost = new Container();
-      app.stage.addChild(roomHost);
+      const atmosphere = new AtmosphereLayer(app);
+      app.stage.addChild(
+        atmosphere.weather,
+        atmosphere.fog,
+        roomHost,
+        atmosphere.tint,
+        atmosphere.glows,
+      );
+      const fitAtmosphere = () => {
+        atmosphere.fitScreen();
+      };
+      app.renderer.on('resize', fitAtmosphere);
+      cleanups.push(() => {
+        app?.renderer.off('resize', fitAtmosphere);
+        atmosphere.destroy();
+      });
       const walkers = new Map<string, Walker>();
+      const recolouredTextures = new Map<string, Texture>();
+      cleanups.push(() => {
+        for (const texture of recolouredTextures.values()) {
+          texture.destroy(true);
+        }
+      });
 
-      // Each frame: every villager takes their next step, or fades at a door.
+      // Each frame: every villager takes their next step, or fades at a door;
+      // the light and weather move on.
       const reducedMotion = prefersReducedMotion();
       app.ticker.add((ticker) => {
+        atmosphere.update(
+          ticker.deltaMS,
+          {
+            ...atmosphereRef.current,
+            zoom: ZOOMS[camera.zoomIndex] ?? 3,
+            reducedMotion,
+          },
+          world,
+        );
+        const walkMs = ticker.deltaMS * paceRef.current;
         for (const walker of walkers.values()) {
-          walker.state = stepWalker(walker.state, ticker.deltaMS, reducedMotion);
+          walker.state = stepWalker(walker.state, walkMs, reducedMotion);
           const at = walkerPosition(walker.state, reducedMotion);
           walker.sprite.position.set(Math.round(at.x * TILE_PX), Math.round(at.y * TILE_PX));
           walker.sprite.zIndex = walker.sprite.y + walker.sprite.height;
@@ -402,6 +530,9 @@ export function VillageCanvas({
 
       setScene({
         app,
+        groundGroup,
+        recoloured: recolouredTextures,
+        atmosphere,
         world,
         roomHost,
         flatHost,
@@ -435,6 +566,9 @@ export function VillageCanvas({
     async function populate(current: Scene) {
       const flat = new Container();
       for (const item of plan.groundDecor) {
+        if (!season.blooms && isBloom(item.sprite)) {
+          continue;
+        }
         flat.addChild(
           new Sprite({ texture: await loadFrameTexture(item.sprite), x: item.x, y: item.y }),
         );
@@ -442,8 +576,18 @@ export function VillageCanvas({
 
       const objects: Sprite[] = [];
       for (const item of plan.standing) {
+        let texture = await loadFrameTexture(item.sprite);
+        if (item.kind === 'decor' && season.foliage && isFoliage(item.sprite)) {
+          texture = recoloured(
+            current.app,
+            current.recoloured,
+            texture,
+            season.foliage,
+            season.season,
+          );
+        }
         const sprite = new Sprite({
-          texture: await loadFrameTexture(item.sprite),
+          texture,
           x: item.x,
           y: item.y,
           zIndex: item.y + item.sprite.height,
@@ -484,6 +628,7 @@ export function VillageCanvas({
         old.destroy();
       }
       current.flatHost.addChild(flat);
+      current.atmosphere.setGlows(glowsFor(plan.buildings));
       if (objects.length > 0) {
         current.objectsHost.addChild(...objects);
       }
@@ -495,7 +640,15 @@ export function VillageCanvas({
     return () => {
       cancelled.current = true;
     };
-  }, [scene, plan]);
+  }, [scene, plan, season]);
+
+  // The season's ground: autumn's gold over the grass, winter's snow over grass and paths.
+  useEffect(() => {
+    if (!scene) {
+      return;
+    }
+    scene.groundGroup.filters = season.ground ? [matrixFilter(season.ground)] : [];
+  }, [scene, season]);
 
   // Villagers: new ones appear where they belong; everyone else sets off
   // for their new spot, through doors and along the roads.
@@ -691,12 +844,14 @@ export function VillageCanvas({
     };
   }, [scene, roomBuildingId, occupants]);
 
-  const inside = room !== null;
-
   return (
     <div
       ref={containerRef}
       data-testid="village-canvas"
+      data-light={lightWord(data.hour)}
+      data-indoors={inside ? 'true' : 'false'}
+      data-season={data.season}
+      data-weather={data.weather}
       className="relative h-full w-full overflow-hidden"
     >
       {hovered && (
