@@ -27,6 +27,8 @@ export interface WorkContext {
   villageSeed: number;
   season: Season;
   weather: WeatherKind;
+  /** The worker's traits' effect on output (`workMultiplierFor`); 1 when omitted. */
+  traitMultiplier?: number;
 }
 
 export interface StintResult {
@@ -77,7 +79,7 @@ function skillMultiplier(skillLevel: number): number {
 /**
  * Runs one worker's stint: checks inputs are in stock (waiting with a plain
  * reason if not), consumes them, and produces the trade's outputs modified
- * by season, weather, skill, tools and mood (spec section 6).
+ * by season, weather, skill, tools, mood and traits (spec sections 6-7).
  *
  * Inputs are consumed into, and outputs produced from, the `market` account:
  * it stands for the outside world and has no balance of its own, so it is a
@@ -85,7 +87,7 @@ function skillMultiplier(skillLevel: number): number {
  */
 export function runStint(
   ledger: LedgerState,
-  // Traits don't change a stint's output yet, so a stint doesn't need them.
+  // Traits reach a stint as `context.traitMultiplier`, so it doesn't need the list.
   assignment: Omit<WorkerAssignment, 'traits'>,
   context: WorkContext,
 ): StintResult {
@@ -130,7 +132,8 @@ export function runStint(
   const skill = skillMultiplier(assignment.skillLevel);
   const tool = assignment.hasTool ? 1.2 : 1;
   const mood = Math.min(1, Math.max(0.5, assignment.moodFactor));
-  const multiplier = season * weather * skill * tool * mood;
+  const traits = context.traitMultiplier ?? 1;
+  const multiplier = season * weather * skill * tool * mood * traits;
 
   const produced: Record<string, number> = {};
   for (const output of trade.outputs) {
