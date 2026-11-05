@@ -343,3 +343,15 @@
 - Day and night light: the map is tinted amber at dawn, violet at dusk and
   deep blue at night (about 45% brightness), blending smoothly. Panels and
   dialogs are never tinted (#173).
+- Leaving a building no longer leaves the map blank: rooms are drawn by the
+  map's own renderer, so the page has only one (#175).
+- Walk-in rooms: going inside fills the screen with the room, with a back wall,
+  windows, a picture, floorboards and a doorway, and a moment of dark as you
+  step through. Whoever is in that building stands in the room and can be
+  clicked. A sign at the top says who's in and leads back out, as does Esc.
+  Indoors the light follows the clock more softly (#176).
+- The owner can pin a note on the notice board from the journal. It's an
+  `OwnerPostOnBoard` command of its own, so a villager can't post as the
+  owner (#177).
+- Thanking counts once a day per villager. A second thanks is refused, and
+  the card says so (#178).

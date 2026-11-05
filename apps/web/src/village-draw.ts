@@ -81,8 +81,42 @@ export function villagersOnMap(
   return placed;
 }
 
+/** Someone indoors, as a room draws them. */
+export interface Occupant {
+  villager: VillagerFact;
+  sprite: SpriteFrame;
+  where: string;
+}
+
+/**
+ * Who's inside `buildingId` right now - in one particular copy of it
+ * (`slot`, for a village with several cottages), or in any copy if no
+ * slot is given.
+ */
+export function villagersInside(
+  data: VillageFacts,
+  buildingId: string,
+  slot?: number,
+): readonly Occupant[] {
+  const spots = spotsNow(data);
+  const inside: Occupant[] = [];
+  data.villagers.forEach((villager, index) => {
+    const at = spots[index]?.inside;
+    if (at?.buildingId === buildingId && (slot === undefined || at.slot === slot)) {
+      inside.push({
+        villager,
+        sprite: spriteForVillager(villager.id),
+        where: spots[index]?.where ?? '',
+      });
+    }
+  });
+  return inside;
+}
+
 export interface PlacedBuilding {
   buildingId: string;
+  /** Which copy of this building it is, in build order: 0 for the first cottage, 1 for the second. */
+  slot: number;
   sprite: SpriteFrame;
   /** Tile coordinates of the plot's top-left corner (spec section 8). */
   x: number;
@@ -113,7 +147,7 @@ export function builtBuildingsNow(
     if (!plot || plot.map !== map) {
       continue;
     }
-    placed.push({ buildingId, sprite, x: plot.x, y: plot.y });
+    placed.push({ buildingId, slot, sprite, x: plot.x, y: plot.y });
   }
   return placed;
 }
@@ -127,6 +161,7 @@ export interface DrawnSprite {
 
 export interface BuildingDrawnSprite extends DrawnSprite {
   buildingId: string;
+  slot: number;
 }
 
 /** Anything that stands up, drawn in order of its bottom edge so nearer things cover farther ones. */
@@ -168,6 +203,7 @@ export function planCanvasDraw(data: VillageFacts, map: MapId = 'main'): CanvasD
     const plotY = building.y * TILE_PX;
     return {
       buildingId: building.buildingId,
+      slot: building.slot,
       sprite: building.sprite,
       x: plotX + Math.floor((fw * TILE_PX - building.sprite.width) / 2 / TILE_PX) * TILE_PX,
       y: plotY + fh * TILE_PX - building.sprite.height,

@@ -183,7 +183,7 @@ export function renderFacts(snapshot: FactsSnapshot): string {
 
   if (snapshot.boardPosts.length > 0) {
     lines.push(
-      `On the notice board: ${snapshot.boardPosts.map((post) => `${post.author}: "${post.text}"`).join('; ')}`,
+      `On the notice board: ${snapshot.boardPosts.map((post) => `${post.author === 'owner' ? 'the owner' : post.author}: "${post.text}"`).join('; ')}`,
     );
   }
 

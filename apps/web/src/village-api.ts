@@ -411,6 +411,17 @@ export function useThankVillager() {
   });
 }
 
+/** The owner pins a note on the notice board. */
+export function usePinNote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (text: string) => postJson('/api/board', { text }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['village'] });
+    },
+  });
+}
+
 /** Marks a promise kept, or lets the villager off it. */
 export function useDecidePromise() {
   const queryClient = useQueryClient();

@@ -86,6 +86,9 @@ const updateSettingsSchema = z
 const BUDGET_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const setSpeedSchema = z.object({ speed: clockSpeedSchema });
 const decideSchema = z.object({ decision: z.enum(['approved', 'declined']) });
+/** A note the owner pins on the board. */
+const boardPostSchema = z.object({ text: z.string().trim().min(1).max(200) });
+
 const promiseDecisionSchema = z.object({ decision: z.enum(['kept', 'released']) });
 /** How many past decisions the inbox shows alongside what's pending. */
 const RECENT_DECISIONS = 10;
@@ -212,8 +215,24 @@ export async function createApp(options: CreateAppOptions = {}) {
     if (!villagerExists(id)) {
       return c.json({ error: `No villager "${id}"` }, 404);
     }
-    await village.act({ kind: 'ThankVillager', villagerId: id });
+    try {
+      await village.act({ kind: 'ThankVillager', villagerId: id });
+    } catch (error) {
+      // Already thanked today: nothing changed.
+      return c.json({ error: error instanceof Error ? error.message : String(error) }, 409);
+    }
     return c.json(villagerCard(village.state, id));
+  });
+
+  /** The owner pins a note on the notice board: `{ text }`, up to 200 characters. */
+  app.post('/api/board', async (c) => {
+    const body: unknown = await c.req.json().catch(() => null);
+    const parsed = boardPostSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: 'text must be 1-200 characters' }, 400);
+    }
+    await village.act({ kind: 'OwnerPostOnBoard', text: parsed.data.text });
+    return c.json({ ok: true });
   });
 
   /** The owner marks a villager's promise kept, or lets them off it: `{ decision: 'kept' | 'released' }`. */

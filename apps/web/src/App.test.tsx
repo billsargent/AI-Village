@@ -63,6 +63,10 @@ function fetchServing(
         : url.includes('/api/clock')
           ? { speed: 1, paused: false }
           : facts;
+    // A handler can answer with a whole Response, for an error status.
+    if (body instanceof Response) {
+      return Promise.resolve(body);
+    }
     return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
   });
 }
@@ -122,19 +126,71 @@ describe('App', () => {
     renderApp();
 
     await screen.findByLabelText(/Moonday, spring day 1/);
-    expect(screen.queryByTestId('interior-canvas')).toBeFalsy();
+    expect(screen.queryByRole('region', { name: 'Inside the Cottage' })).toBeFalsy();
 
     fireEvent.click(screen.getByText('Look inside Cottage'));
 
-    // The room opens as a dialog over the map, which stays where it was.
-    expect(await screen.findByTestId('interior-canvas')).toBeTruthy();
-    expect(screen.getByRole('dialog', { name: 'Cottage' })).toBeTruthy();
+    // The room takes the screen - drawn by the map's own canvas, not a dialog
+    // over it - and the map's own controls step aside.
+    const inside = screen.getByRole('region', { name: 'Inside the Cottage' });
+    expect(inside.textContent).toContain('Nobody is in.');
+    expect(screen.queryByRole('dialog')).toBeFalsy();
     expect(screen.getByTestId('village-canvas')).toBeTruthy();
+    expect(screen.getByTestId('light').dataset.indoors).toBe('true');
+    expect(screen.getByRole('group', { name: 'Maps', hidden: true }).className).toContain('hidden');
 
     fireEvent.click(screen.getByText('Back to village'));
 
+    expect(screen.queryByRole('region', { name: 'Inside the Cottage' })).toBeFalsy();
+    expect(screen.getByTestId('light').dataset.indoors).toBe('false');
+  });
+
+  it('leaves a room with Escape', async () => {
+    const facts: VillageFacts = { ...FACTS, builtBuildingIds: ['cottage'] };
+    vi.stubGlobal('fetch', fetchServing(facts));
+    renderApp();
+
+    await screen.findByLabelText(/Moonday, spring day 1/);
+    fireEvent.click(screen.getByText('Look inside Cottage'));
+    expect(screen.getByRole('region', { name: 'Inside the Cottage' })).toBeTruthy();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('region', { name: 'Inside the Cottage' })).toBeFalsy();
+  });
+
+  it("closes a villager's card with Escape without leaving the room too", async () => {
+    const facts: VillageFacts = { ...FACTS, builtBuildingIds: ['cottage'] };
+    vi.stubGlobal('fetch', fetchServing(facts));
+    renderApp();
+
+    await screen.findByLabelText(/Moonday, spring day 1/);
+    fireEvent.click(screen.getByText('Look inside Cottage'));
+    fireEvent.click(screen.getByRole('button', { name: 'About Hesper' }));
+    const card = screen.getByRole('dialog', { name: 'Hesper' });
+
+    fireEvent.keyDown(within(card).getAllByRole('button')[0] as HTMLElement, { key: 'Escape' });
+
     expect(screen.queryByRole('dialog')).toBeFalsy();
-    expect(screen.queryByTestId('interior-canvas')).toBeFalsy();
+    expect(screen.getByRole('region', { name: 'Inside the Cottage' })).toBeTruthy();
+  });
+
+  it('pins a note of your own on the board', async () => {
+    const fetchMock = fetchServing(FACTS, { '/api/board': () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    renderApp();
+
+    await screen.findByLabelText(/Moonday, spring day 1/);
+    const box = screen.getByLabelText('A note for the board');
+    fireEvent.change(box, { target: { value: 'Harvest supper on Starday!' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Pin it' }));
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([input]) => urlOf(input).includes('/api/board'));
+      expect(call).toBeTruthy();
+      expect(JSON.parse(call?.[1]?.body as string)).toEqual({
+        text: 'Harvest supper on Starday!',
+      });
+    });
   });
 
   it('opens settings as a dialog and closes it again', async () => {
@@ -201,7 +257,7 @@ describe('App', () => {
     await screen.findByLabelText(/Moonday, spring day 1/);
     fireEvent.click(screen.getByText('Look inside Cottage'));
 
-    await screen.findByTestId('interior-canvas');
+    expect(screen.getByRole('region', { name: 'Inside the Cottage' })).toBeTruthy();
     expect(screen.queryByText(/Click the bookshelf/)).toBeFalsy();
   });
 
@@ -567,6 +623,35 @@ describe("the villager card's buttons", () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+  });
+
+  it('says so when a villager has already been thanked today', async () => {
+    vi.stubGlobal(
+      'fetch',
+      fetchServing(FACTS, {
+        '/api/villagers/hesper/thank': () =>
+          new Response(JSON.stringify({ error: 'hesper has already been thanked today' }), {
+            status: 409,
+          }),
+        '/api/villagers/hesper': () => ({
+          id: 'hesper',
+          tradeId: 'mayor',
+          role: 'mayor',
+          skillLevel: 1,
+          traits: [],
+          needs: null,
+          mood: null,
+          relationships: [],
+          memories: [],
+          promises: [],
+        }),
+      }),
+    );
+    renderApp();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'About Hesper' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Thank Hesper' }));
+    expect(await screen.findByText("You've already thanked Hesper today.")).toBeTruthy();
   });
 
   it('thanks a villager, and marks a promise kept', async () => {

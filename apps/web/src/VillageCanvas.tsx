@@ -1,9 +1,20 @@
-import { GRASS_TILE, TILE_PX, walkGrid, type MapId } from '@ai-village/content';
-import { Application, Container, Sprite, TilingSprite } from 'pixi.js';
+import {
+  BACK_WALL,
+  FLOORBOARDS,
+  GRASS_TILE,
+  TILE_PX,
+  WALL_TOP_COLOR,
+  walkGrid,
+  type BuildingId,
+  type FurnitureKind,
+  type MapId,
+} from '@ai-village/content';
+import { Application, Container, Graphics, Sprite, TilingSprite } from 'pixi.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { loadFrameTexture } from './load-frame-texture.js';
 import type { VillageFacts } from './village-api.js';
-import { planCanvasDraw, villagersOnMap } from './village-draw.js';
+import { planInteriorDraw, roomZoom } from './interior-draw.js';
+import { planCanvasDraw, villagersInside, villagersOnMap } from './village-draw.js';
 import {
   placeWalker,
   retargetWalker,
@@ -11,6 +22,10 @@ import {
   walkerPosition,
   type WalkerState,
 } from './walkers.js';
+
+/** Behind the map, and round a room: the dark beyond its walls. */
+const MAP_BACKGROUND = '#2f4f2f';
+const ROOM_SURROUND = '#16100b';
 
 /** Whole steps only, no smoothing (spec sections 8 and 10: "zooms in whole steps (2x, 3x, 4x)"). */
 const ZOOMS = [2, 3, 4] as const;
@@ -55,12 +70,27 @@ function titleCase(id: string): string {
     .join(' ');
 }
 
+/** A room the owner has gone into: one building, or one copy of it (`slot`) when there are several. */
+export interface RoomView {
+  buildingId: BuildingId;
+  slot?: number | undefined;
+}
+
 export interface VillageCanvasProps {
   data: VillageFacts;
   map?: MapId;
   /** Buildings that open something when clicked - only these get a pointer cursor. */
   clickableBuildingIds?: ReadonlySet<string> | undefined;
-  onBuildingClick?: ((buildingId: string) => void) | undefined;
+  onBuildingClick?: ((buildingId: string, slot: number) => void) | undefined;
+  /**
+   * The room the owner is inside, drawn full-screen in place of the map
+   * by this same renderer (one renderer per page: a second PixiJS
+   * Application, destroyed on the way out, broke the map's own drawing).
+   */
+  room?: RoomView | null | undefined;
+  /** Furniture in the room that does something when clicked. Everything else stays inert. */
+  interactiveKinds?: ReadonlySet<FurnitureKind> | undefined;
+  onFurnitureClick?: ((kind: FurnitureKind) => void) | undefined;
   /** Clicking a villager - the app opens a chat with them. */
   onVillagerClick?: ((villagerId: string) => void) | undefined;
 }
@@ -74,7 +104,10 @@ interface Walker {
 }
 
 /** What the pointer is over, for the label under the map. */
-type Hovered = { kind: 'building'; id: string } | { kind: 'villager'; id: string; where: string };
+type Hovered =
+  | { kind: 'building'; id: string }
+  | { kind: 'villager'; id: string; where: string }
+  | { kind: 'furniture'; id: FurnitureKind };
 
 function prefersReducedMotion(): boolean {
   return typeof window.matchMedia === 'function'
@@ -84,6 +117,11 @@ function prefersReducedMotion(): boolean {
 
 /** A live scene for one map: the renderer, and the two layers the village's contents are drawn into. */
 interface Scene {
+  app: Application;
+  /** The map, hidden while a room is shown. */
+  world: Container;
+  /** The room, when there is one, drawn over the dark instead of the map. */
+  roomHost: Container;
   /** Flowers and daisies, flat on the grass under everything that stands. */
   flatHost: Container;
   /** Buildings, villagers, trees and rocks, depth-sorted by `zIndex` (their bottom edge). */
@@ -129,6 +167,9 @@ export function VillageCanvas({
   clickableBuildingIds,
   onBuildingClick,
   onVillagerClick,
+  room = null,
+  interactiveKinds,
+  onFurnitureClick,
 }: VillageCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const zoomByRef = useRef<((step: number) => void) | null>(null);
@@ -145,6 +186,13 @@ export function VillageCanvas({
   onVillagerClickRef.current = onVillagerClick;
   const dataRef = useRef(data);
   dataRef.current = data;
+  const interactiveKindsRef = useRef(interactiveKinds);
+  interactiveKindsRef.current = interactiveKinds;
+  const onFurnitureClickRef = useRef(onFurnitureClick);
+  onFurnitureClickRef.current = onFurnitureClick;
+  // Read by the map's own input handlers: no panning or zooming the map from inside a room.
+  const insideRef = useRef(room !== null);
+  insideRef.current = room !== null;
 
   const key = contentsKey(data, map);
   // Re-planned only when what's standing on the map changes, not on every
@@ -155,6 +203,12 @@ export function VillageCanvas({
   const whoKey = villagersKey(data, map);
   const placements = useMemo(() => villagersOnMap(dataRef.current, map), [whoKey, map]);
   const grid = useMemo(() => walkGrid(map, dataRef.current.builtBuildingIds), [key, map]);
+  const roomBuildingId = room?.buildingId ?? null;
+  const roomSlot = room?.slot;
+  const occupants = useMemo(
+    () => (roomBuildingId ? villagersInside(dataRef.current, roomBuildingId, roomSlot) : []),
+    [whoKey, roomBuildingId, roomSlot],
+  );
 
   // The renderer, camera, input and ground: once per map.
   useEffect(() => {
@@ -178,7 +232,7 @@ export function VillageCanvas({
       try {
         await nextApp.init({
           resizeTo: container ?? window,
-          background: '#2f4f2f',
+          background: MAP_BACKGROUND,
           antialias: false,
         });
       } catch (error) {
@@ -236,6 +290,9 @@ export function VillageCanvas({
       let drag: { startX: number; startY: number; camX: number; camY: number } | null = null;
       let dragged = false;
       const onPointerDown = (event: PointerEvent) => {
+        if (insideRef.current) {
+          return;
+        }
         drag = { startX: event.clientX, startY: event.clientY, camX: camera.x, camY: camera.y };
         dragged = false;
       };
@@ -265,12 +322,15 @@ export function VillageCanvas({
 
       const onWheel = (event: WheelEvent) => {
         event.preventDefault();
+        if (insideRef.current) {
+          return;
+        }
         zoomByRef.current?.(event.deltaY < 0 ? 1 : -1);
       };
       canvas.addEventListener('wheel', onWheel, { passive: false });
 
       const onKeyDown = (event: KeyboardEvent) => {
-        if (isTyping(event.target)) {
+        if (isTyping(event.target) || insideRef.current) {
           return;
         }
         const pans: Record<string, [number, number]> = {
@@ -323,6 +383,8 @@ export function VillageCanvas({
       const flatHost = new Container();
       const objectsHost = new Container({ sortableChildren: true });
       world.addChild(grass, groundLayer, flatHost, objectsHost);
+      const roomHost = new Container();
+      app.stage.addChild(roomHost);
       const walkers = new Map<string, Walker>();
 
       // Each frame: every villager takes their next step, or fades at a door.
@@ -338,7 +400,16 @@ export function VillageCanvas({
         }
       });
 
-      setScene({ flatHost, objectsHost, statics: [], walkers, isDragging: () => dragged });
+      setScene({
+        app,
+        world,
+        roomHost,
+        flatHost,
+        objectsHost,
+        statics: [],
+        walkers,
+        isDragging: () => dragged,
+      });
     }
 
     void setup();
@@ -378,7 +449,7 @@ export function VillageCanvas({
           zIndex: item.y + item.sprite.height,
         });
         if (item.kind === 'building') {
-          const { buildingId } = item;
+          const { buildingId, slot } = item;
           sprite.eventMode = 'static';
           sprite.on('pointerover', () => {
             setHovered({ kind: 'building', id: buildingId });
@@ -391,7 +462,7 @@ export function VillageCanvas({
           });
           sprite.on('pointertap', () => {
             if (!current.isDragging() && clickableRef.current?.has(buildingId)) {
-              onClickRef.current?.(buildingId);
+              onClickRef.current?.(buildingId, slot);
             }
           });
         }
@@ -493,6 +564,135 @@ export function VillageCanvas({
     };
   }, [scene, placements, grid]);
 
+  // The room: drawn over the dark in place of the map while the owner is inside.
+  useEffect(() => {
+    if (!scene) {
+      return;
+    }
+    const { app, world, roomHost } = scene;
+    const plan = roomBuildingId ? planInteriorDraw(roomBuildingId) : undefined;
+    if (!plan) {
+      return;
+    }
+    const roomPlan = plan;
+    const cancelled = { current: false };
+    let onResize: (() => void) | undefined;
+
+    async function build() {
+      const built = new Container();
+
+      // The pale wall top all round, with a dark edge.
+      built.addChild(
+        new Graphics()
+          .rect(0, 0, roomPlan.width, roomPlan.height)
+          .fill('#5c4a2e')
+          .rect(1, 1, roomPlan.width - 2, roomPlan.height - 2)
+          .fill(WALL_TOP_COLOR),
+      );
+
+      const wallTexture = await loadFrameTexture(BACK_WALL);
+      const floorTexture = await loadFrameTexture(FLOORBOARDS);
+      built.addChild(
+        new TilingSprite({ texture: wallTexture, ...roomPlan.wall }),
+        new TilingSprite({ texture: floorTexture, ...roomPlan.floor }),
+        // The doorway: the floor runs on out through the gap in the front wall.
+        new TilingSprite({ texture: floorTexture, ...roomPlan.door }),
+      );
+      for (const item of roomPlan.wallDecor) {
+        built.addChild(
+          new Sprite({ texture: await loadFrameTexture(item.sprite), x: item.x, y: item.y }),
+        );
+      }
+
+      for (const item of roomPlan.furniture) {
+        const sprite = new Sprite({
+          texture: await loadFrameTexture(item.sprite),
+          x: item.x,
+          y: item.y,
+        });
+        const kind = item.kind;
+        if (kind && interactiveKindsRef.current?.has(kind)) {
+          sprite.eventMode = 'static';
+          sprite.cursor = 'pointer';
+          sprite.on('pointerover', () => {
+            setHovered({ kind: 'furniture', id: kind });
+          });
+          sprite.on('pointerout', () => {
+            setHovered((now) => (now?.kind === 'furniture' ? null : now));
+          });
+          sprite.on('pointertap', () => {
+            onFurnitureClickRef.current?.(kind);
+          });
+        }
+        built.addChild(sprite);
+      }
+
+      // Whoever's in here, standing about on the open floor.
+      for (const [index, occupant] of occupants.entries()) {
+        const spot = roomPlan.standingSpots[index % roomPlan.standingSpots.length];
+        if (!spot) {
+          continue;
+        }
+        const sprite = new Sprite({
+          texture: await loadFrameTexture(occupant.sprite),
+          x: spot.x,
+          y: spot.y,
+        });
+        const id = occupant.villager.id;
+        sprite.eventMode = 'static';
+        sprite.cursor = 'pointer';
+        sprite.on('pointerover', () => {
+          setHovered({ kind: 'villager', id, where: occupant.where });
+        });
+        sprite.on('pointerout', () => {
+          setHovered((now) => (now?.id === id ? null : now));
+        });
+        sprite.on('pointertap', () => {
+          onVillagerClickRef.current?.(id);
+        });
+        built.addChild(sprite);
+      }
+
+      // Set by the cleanup below, across the awaits.
+      if (cancelled.current) {
+        built.destroy({ children: true });
+        return;
+      }
+      roomHost.addChild(built);
+      // The biggest whole zoom that fits, centred on the screen.
+      const place = () => {
+        const zoom = roomZoom(roomPlan, app.screen.width, app.screen.height);
+        roomHost.scale.set(zoom);
+        roomHost.position.set(
+          Math.round((app.screen.width - roomPlan.width * zoom) / 2),
+          Math.round((app.screen.height - roomPlan.height * zoom) / 2),
+        );
+      };
+      place();
+      onResize = place;
+      app.renderer.on('resize', place);
+      world.visible = false;
+      app.renderer.background.color = ROOM_SURROUND;
+    }
+
+    void build();
+
+    return () => {
+      cancelled.current = true;
+      if (onResize) {
+        app.renderer.off('resize', onResize);
+      }
+      for (const old of roomHost.removeChildren()) {
+        old.destroy({ children: true });
+      }
+      world.visible = true;
+      app.renderer.background.color = MAP_BACKGROUND;
+      setHovered(null);
+    };
+  }, [scene, roomBuildingId, occupants]);
+
+  const inside = room !== null;
+
   return (
     <div
       ref={containerRef}
@@ -503,10 +703,12 @@ export function VillageCanvas({
         <div className="wood-panel pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 px-1 text-lg whitespace-nowrap">
           {hovered.kind === 'building'
             ? `${titleCase(hovered.id)}${clickableBuildingIds?.has(hovered.id) ? ' - click to go inside' : ''}`
-            : `${titleCase(hovered.id)}, ${hovered.where} - click to meet them`}
+            : hovered.kind === 'furniture'
+              ? `${titleCase(hovered.id)} - click to look`
+              : `${titleCase(hovered.id)}, ${hovered.where} - click to meet them`}
         </div>
       )}
-      <div className="absolute right-3 bottom-3 z-10 flex gap-1">
+      <div className={`absolute right-3 bottom-3 z-10 flex gap-1 ${inside ? 'hidden' : ''}`}>
         <button
           type="button"
           aria-label="Zoom out"

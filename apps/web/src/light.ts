@@ -40,6 +40,17 @@ export function lightAt(hour: number, minuteOfHour: number): Rgb {
   return NIGHT;
 }
 
+/**
+ * Indoors, the same hour's light, but softer: only 40% as far from
+ * neutral, as though the lamps were lit. A room is never as dark as the
+ * night outside it.
+ */
+export function indoorLightAt(hour: number, minuteOfHour: number): Rgb {
+  const soften = (c: number) => Math.round(255 - (255 - c) * 0.4);
+  const [r, g, b] = lightAt(hour, minuteOfHour);
+  return [soften(r), soften(g), soften(b)];
+}
+
 /** Roughly how bright the map looks under the tint, 0-1. */
 export function brightnessOf(rgb: Rgb): number {
   return (rgb[0] + rgb[1] + rgb[2]) / (3 * 255);
