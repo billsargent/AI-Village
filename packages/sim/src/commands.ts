@@ -35,6 +35,7 @@ export type Command =
   | { kind: 'AcceptOrder'; orderId: number }
   | { kind: 'DeclineOrder'; orderId: number }
   | { kind: 'PostOnBoard'; author: string; text: string }
+  | { kind: 'OwnerPostOnBoard'; text: string }
   | { kind: 'CallVote'; topic: string; options: readonly string[] }
   | { kind: 'Remember'; villagerId: string; text: string; importance: number; about?: string }
   | { kind: 'MakePromise'; villagerId: string; text: string; dueInDays: number }
@@ -90,6 +91,8 @@ export function apply(state: VillageState, command: Command): CommandResult {
       return applyOrderDecision(state, command.orderId, 'declined');
     case 'PostOnBoard':
       return applyPostOnBoard(state, command);
+    case 'OwnerPostOnBoard':
+      return applyOwnerPostOnBoard(state, command);
     case 'CallVote':
       return applyCallVote(state, command);
     case 'Remember':
@@ -451,9 +454,54 @@ function applyDecidePromise(
 
 const THANK_YOU_FUN_BOOST = 20;
 
+/** Who signs the owner's own notes on the board. */
+export const OWNER_AUTHOR = 'owner';
+
+/**
+ * The owner pins a note on the board. It's a command of its own, not
+ * `PostOnBoard` with an "owner" author, so a villager's model can never
+ * post as the owner through `post_on_board`.
+ */
+function applyOwnerPostOnBoard(state: VillageState, command: { text: string }): CommandResult {
+  const text = command.text.trim();
+  if (text.length === 0) {
+    throw new CommandError('A board post cannot be empty');
+  }
+  const day = calendarDateFromMinute(state.clock.minute).absoluteDay;
+  const postId = state.board.nextId;
+  const board = postToBoard(state.board, OWNER_AUTHOR, text, day);
+  const chronicle = appendChronicle(state.chronicle, {
+    minute: state.clock.minute,
+    kind: 'board-post',
+    text: `The owner pinned a note on the board: "${text}"`,
+    actors: [],
+    importance: 2,
+    public: true,
+  });
+  return {
+    state: { ...state, board, chronicle },
+    events: [{ kind: 'PostedOnBoard', postId }],
+  };
+}
+
+/** What a villager remembers when thanked - and how a second thanks the same day is spotted. */
+const THANKED_MEMORY = 'The owner thanked me.';
+
 /** Spec section 15: "the owner can thank a villager with one click: their mood lifts, and they remember it." */
 function applyThankVillager(state: VillageState, command: { villagerId: string }): CommandResult {
   requireVillager(state, command.villagerId);
+  // Once a day: thanks that came again and again would mean nothing.
+  const today = calendarDateFromMinute(state.clock.minute).absoluteDay;
+  const thankedToday = state.memory.memories.some(
+    (memory) =>
+      memory.villagerId === command.villagerId &&
+      memory.about === 'owner' &&
+      memory.text === THANKED_MEMORY &&
+      calendarDateFromMinute(memory.minute).absoluteDay === today,
+  );
+  if (thankedToday) {
+    throw new CommandError(`${command.villagerId} has already been thanked today`);
+  }
 
   const needs = state.villagerNeeds[command.villagerId];
   const villagerNeeds = needs
@@ -470,7 +518,7 @@ function applyThankVillager(state: VillageState, command: { villagerId: string }
   const memory = addMemory(state.memory, {
     villagerId: command.villagerId,
     minute: state.clock.minute,
-    text: 'The owner thanked me.',
+    text: THANKED_MEMORY,
     importance: 5,
     about: 'owner',
   });

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   builtBuildingsNow,
   planCanvasDraw,
+  villagersInside,
   villagersOnMap,
   whereaboutsNow,
 } from './village-draw.js';
@@ -81,6 +82,20 @@ describe('whereaboutsNow', () => {
   it('has everyone at home at night', () => {
     const night: VillageFacts = { ...BASE_FACTS, phase: 'night' };
     expect(whereaboutsNow(night).map((w) => w.where)).toEqual(['at home', 'at home']);
+  });
+});
+
+describe('villagersInside', () => {
+  it('finds who is in a building: the mayor at work in the town hall, nobody at home by day', () => {
+    expect(villagersInside(BASE_FACTS, 'town-hall').map((o) => o.villager.id)).toEqual(['hesper']);
+    expect(villagersInside(BASE_FACTS, 'cottage')).toEqual([]);
+  });
+
+  it('has everyone home in the cottage at night - in that copy of it, not another', () => {
+    const night: VillageFacts = { ...BASE_FACTS, phase: 'night' };
+    expect(villagersInside(night, 'cottage').map((o) => o.villager.id)).toEqual(['hesper', 'ada']);
+    expect(villagersInside(night, 'cottage', 0)).toHaveLength(2);
+    expect(villagersInside(night, 'cottage', 1)).toEqual([]);
   });
 });
 

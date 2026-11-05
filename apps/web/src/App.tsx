@@ -1,23 +1,23 @@
 import type { BuildingId, FurnitureKind, MapId } from '@ai-village/content';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChatPanel } from './ChatPanel.js';
-import { lightAt, lightWord } from './light.js';
+import { indoorLightAt, lightAt, lightWord } from './light.js';
 import { VillagerCardPanel } from './VillagerCardPanel.js';
 import { buildingsWithInteriors } from './interior-draw.js';
-import { InteriorCanvas } from './InteriorCanvas.js';
 import { InboxPanel } from './InboxPanel.js';
 import { SettingsPanel } from './SettingsPanel.js';
 import {
   useClockStatus,
   useLiveUpdates,
   usePendingApprovalCount,
+  usePinNote,
   useSetClockSpeed,
   useVillageFacts,
   type ClockSpeed,
   type VillageFacts,
 } from './village-api.js';
-import { VillageCanvas } from './VillageCanvas.js';
-import { whereaboutsNow } from './village-draw.js';
+import { VillageCanvas, type RoomView } from './VillageCanvas.js';
+import { villagersInside, whereaboutsNow } from './village-draw.js';
 
 const MAP_LABELS: Record<MapId, string> = {
   main: 'Village',
@@ -77,6 +77,8 @@ function Dialog({
       className="absolute inset-0 z-20 flex items-center justify-center bg-black/45 p-4"
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
+          // Handled: the room behind shouldn't take this Escape as its own.
+          event.preventDefault();
           onClose();
         }
       }}
@@ -165,7 +167,9 @@ export function App() {
   const { data, isPending, isError, error } = useVillageFacts();
   useLiveUpdates();
   const [map, setMap] = useState<MapId>('main');
-  const [interiorBuildingId, setInteriorBuildingId] = useState<BuildingId | null>(null);
+  const [room, setRoom] = useState<RoomView | null>(null);
+  // Bumped on every step through a door, so the fade through dark plays again.
+  const [doorways, setDoorways] = useState(0);
   const [panel, setPanel] = useState<FurniturePanel | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showJournal, setShowJournal] = useState(true);
@@ -174,6 +178,20 @@ export function App() {
   const [cardFor, setCardFor] = useState<string | null>(null);
   const pendingApprovals = usePendingApprovalCount();
   const firstVillagerId = data?.villagers[0]?.id ?? null;
+  const overlayOpen = showSettings || showInbox || chatWith !== null || cardFor !== null;
+
+  const enterRoom = (next: RoomView) => {
+    setRoom(next);
+    setPanel(null);
+    setDoorways((n) => n + 1);
+  };
+  const leaveRoom = () => {
+    setRoom(null);
+    setPanel(null);
+    setDoorways((n) => n + 1);
+  };
+  const leaveRoomRef = useRef(leaveRoom);
+  leaveRoomRef.current = leaveRoom;
 
   // Spec section 14's keys: C opens the chat (with the first villager), I the inbox.
   useEffect(() => {
@@ -183,6 +201,15 @@ export function App() {
         return;
       }
       if (event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+      }
+      // Escape steps back out: first off an open furniture panel, then out of the room.
+      if (event.key === 'Escape' && room && !overlayOpen && !event.defaultPrevented) {
+        if (panel) {
+          setPanel(null);
+        } else {
+          leaveRoomRef.current();
+        }
         return;
       }
       if (event.key === 'c' && firstVillagerId) {
@@ -195,7 +222,7 @@ export function App() {
     return () => {
       window.removeEventListener('keydown', onKey);
     };
-  }, [firstVillagerId]);
+  }, [firstVillagerId, room, panel, overlayOpen]);
 
   if (isPending) {
     return (
@@ -216,10 +243,7 @@ export function App() {
   const whereabouts = whereaboutsNow(data);
   const furnished = buildingsWithInteriors(data.builtBuildingIds);
 
-  const closeInterior = () => {
-    setInteriorBuildingId(null);
-    setPanel(null);
-  };
+  const occupants = room ? villagersInside(data, room.buildingId, room.slot) : [];
 
   return (
     <main className="relative h-full w-full overflow-hidden">
@@ -228,8 +252,27 @@ export function App() {
           data={data}
           map={map}
           clickableBuildingIds={new Set(furnished)}
-          onBuildingClick={(buildingId) => {
-            setInteriorBuildingId(buildingId as BuildingId);
+          onBuildingClick={(buildingId, slot) => {
+            enterRoom({ buildingId: buildingId as BuildingId, slot });
+          }}
+          room={room}
+          interactiveKinds={
+            room?.buildingId === 'town-hall'
+              ? TOWN_HALL_INTERACTIVE_KINDS
+              : room?.buildingId === 'shop'
+                ? SHOP_INTERACTIVE_KINDS
+                : undefined
+          }
+          onFurnitureClick={(kind) => {
+            if (kind === 'bookshelf') {
+              setPanel('archive');
+            } else if (kind === 'chest') {
+              setPanel('treasury');
+            } else if (kind === 'book') {
+              setPanel('almanac');
+            } else if (kind === 'table' && room?.buildingId === 'shop') {
+              setPanel('stores');
+            }
           }}
           onVillagerClick={(villagerId) => {
             setCardFor(villagerId);
@@ -242,15 +285,31 @@ export function App() {
         aria-hidden="true"
         data-testid="light"
         data-light={lightWord(data.hour)}
+        data-indoors={room ? 'true' : 'false'}
         className="pointer-events-none absolute inset-0 z-[5] mix-blend-multiply transition-colors duration-1000 motion-reduce:transition-none"
-        style={{ backgroundColor: `rgb(${lightAt(data.hour, data.minuteOfHour).join(' ')})` }}
+        style={{
+          backgroundColor: `rgb(${(room ? indoorLightAt : lightAt)(data.hour, data.minuteOfHour).join(' ')})`,
+        }}
       />
+
+      {/* Stepping through a door: a moment of dark, then the other side. */}
+      {doorways > 0 && (
+        <div
+          key={doorways}
+          aria-hidden="true"
+          className="door-fade pointer-events-none absolute inset-0 z-[6] bg-[#16100b]"
+        />
+      )}
 
       {/* Top left: the village's name, its size, and the maps. */}
       <div className="pointer-events-none absolute top-3 left-3 z-10 flex flex-col gap-2">
         <h1 className="map-text text-4xl leading-none">AI-Village</h1>
         <p className="map-text text-lg">Population: {data.population}</p>
-        <div className="pointer-events-auto flex gap-1" role="group" aria-label="Maps">
+        <div
+          className={`pointer-events-auto flex gap-1 ${room ? 'hidden' : ''}`}
+          role="group"
+          aria-label="Maps"
+        >
           {(Object.keys(MAP_LABELS) as MapId[]).map((mapId) => (
             <button
               key={mapId}
@@ -320,7 +379,7 @@ export function App() {
                       type="button"
                       className="wood-button text-sm"
                       onClick={() => {
-                        setInteriorBuildingId(buildingId);
+                        enterRoom({ buildingId });
                       }}
                     >
                       Look inside {titleCase(buildingId)}
@@ -383,13 +442,16 @@ export function App() {
                       className="border-l-4 border-parchment-dark pl-2"
                     >
                       "{post.text}"{' '}
-                      <span className="text-ink-soft">- {capitalise(post.author)}</span>
+                      <span className="text-ink-soft">
+                        - {post.author === 'owner' ? 'you' : capitalise(post.author)}
+                      </span>
                     </li>
                   ))}
                 </ul>
               ) : (
                 <p className="text-sm text-ink-soft">Nothing pinned up yet.</p>
               )}
+              <PinNote />
             </section>
             <section>
               <h2 className="text-lg">Chronicle</h2>
@@ -407,50 +469,37 @@ export function App() {
         )}
       </div>
 
-      <p className="map-text pointer-events-none absolute bottom-3 left-3 z-10 text-sm">
-        Drag or WASD to look around - click a building to go inside, or a villager to meet them
-      </p>
-
-      {interiorBuildingId && (
-        <Dialog
-          title={titleCase(interiorBuildingId)}
-          onClose={closeInterior}
-          closeLabel="Back to village"
-        >
-          {interiorBuildingId === 'town-hall' && (
+      {room ? (
+        <>
+          {/* Inside: the room's name over the door, who's in, and the way out. */}
+          <section
+            aria-label={`Inside the ${titleCase(room.buildingId)}`}
+            className="wood-panel absolute top-3 left-1/2 z-10 flex -translate-x-1/2 flex-col items-center gap-1 px-2 text-center"
+          >
+            <h2 className="text-2xl leading-none">{titleCase(room.buildingId)}</h2>
             <p className="text-sm text-ink-soft">
-              Click the bookshelf for the archive, the chest for the treasury, or the book for the
-              almanac.
+              {occupants.length === 0
+                ? 'Nobody is in.'
+                : `${occupants.map((o) => capitalise(o.villager.id)).join(' and ')} ${occupants.length === 1 ? 'is' : 'are'} here.`}
             </p>
-          )}
-          {interiorBuildingId === 'shop' && (
-            <p className="text-sm text-ink-soft">Click the counter for the stores.</p>
-          )}
-          <div className="flex flex-wrap items-start gap-3">
-            <div className="border-4 border-ink/70">
-              <InteriorCanvas
-                buildingId={interiorBuildingId}
-                interactiveKinds={
-                  interiorBuildingId === 'town-hall'
-                    ? TOWN_HALL_INTERACTIVE_KINDS
-                    : interiorBuildingId === 'shop'
-                      ? SHOP_INTERACTIVE_KINDS
-                      : undefined
-                }
-                onFurnitureClick={(kind) => {
-                  if (kind === 'bookshelf') {
-                    setPanel('archive');
-                  } else if (kind === 'chest') {
-                    setPanel('treasury');
-                  } else if (kind === 'book') {
-                    setPanel('almanac');
-                  } else if (kind === 'table' && interiorBuildingId === 'shop') {
-                    setPanel('stores');
-                  }
-                }}
-              />
-            </div>
-            {panel && (
+            <p className="max-w-sm text-xs">
+              <span>
+                {room.buildingId === 'town-hall'
+                  ? 'Click the bookshelf for the archive, the chest for the treasury, or the book for the almanac.'
+                  : room.buildingId === 'shop'
+                    ? 'Click the counter for the stores.'
+                    : occupants.length > 0
+                      ? 'Click someone to meet them.'
+                      : ''}
+              </span>{' '}
+              <span>Esc to leave.</span>
+            </p>
+            <button type="button" className="wood-button text-sm" onClick={leaveRoom}>
+              Back to village
+            </button>
+          </section>
+          {panel && (
+            <div className="wood-panel absolute top-1/2 left-3 z-10 max-h-[80%] -translate-y-1/2 overflow-auto">
               <FurnitureDetail
                 panel={panel}
                 data={data}
@@ -458,9 +507,13 @@ export function App() {
                   setPanel(null);
                 }}
               />
-            )}
-          </div>
-        </Dialog>
+            </div>
+          )}
+        </>
+      ) : (
+        <p className="map-text pointer-events-none absolute bottom-3 left-3 z-10 text-sm">
+          Drag or WASD to look around - click a building to go inside, or a villager to meet them
+        </p>
       )}
 
       {cardFor && (
@@ -528,6 +581,48 @@ const PANEL_TITLES: Record<FurniturePanel, string> = {
 };
 
 /** What one clicked piece of furniture opens, on a parchment page beside the room. */
+/** A note of the owner's own for the board, which villagers read like any other. */
+function PinNote() {
+  const [text, setText] = useState('');
+  const pin = usePinNote();
+  return (
+    <form
+      className="mt-1 flex gap-1"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const note = text.trim();
+        if (note.length === 0) {
+          return;
+        }
+        pin.mutate(note, {
+          onSuccess: () => {
+            setText('');
+          },
+        });
+      }}
+    >
+      <input
+        type="text"
+        aria-label="A note for the board"
+        placeholder="Pin a note..."
+        maxLength={200}
+        value={text}
+        onChange={(event) => {
+          setText(event.target.value);
+        }}
+        className="min-w-0 flex-1 border-2 border-parchment-dark bg-parchment px-1 text-sm"
+      />
+      <button
+        type="submit"
+        className="wood-button text-sm"
+        disabled={pin.isPending || text.trim().length === 0}
+      >
+        Pin it
+      </button>
+    </form>
+  );
+}
+
 function FurnitureDetail({
   panel,
   data,

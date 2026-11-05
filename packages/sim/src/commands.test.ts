@@ -1,6 +1,7 @@
 import { VILLAGER_NAMES } from '@ai-village/content';
 import { describe, expect, it } from 'vitest';
-import { apply, CommandError } from './commands.js';
+import { MINUTES_PER_DAY } from './calendar.js';
+import { apply, CommandError, OWNER_AUTHOR } from './commands.js';
 import { getBalance, InsufficientBalanceError } from './ledger.js';
 import type { Order } from './orders.js';
 import { getRelationship } from './relationships.js';
@@ -442,6 +443,52 @@ describe('apply ThankVillager', () => {
     expect(() => apply(village, { kind: 'ThankVillager', villagerId: 'nobody' })).toThrow(
       CommandError,
     );
+  });
+  it('counts once a day: a second thanks the same day is refused, the next day is fine', () => {
+    const village = villageWithTwo();
+    const { state: thanked } = apply(village, { kind: 'ThankVillager', villagerId: 'ada' });
+    expect(() => apply(thanked, { kind: 'ThankVillager', villagerId: 'ada' })).toThrow(
+      'ada has already been thanked today',
+    );
+    // Someone else can still be thanked today.
+    expect(() => apply(thanked, { kind: 'ThankVillager', villagerId: 'tobin' })).not.toThrow();
+
+    const tomorrow: VillageState = {
+      ...thanked,
+      clock: { ...thanked.clock, minute: thanked.clock.minute + MINUTES_PER_DAY },
+    };
+    expect(() => apply(tomorrow, { kind: 'ThankVillager', villagerId: 'ada' })).not.toThrow();
+  });
+});
+
+describe('apply OwnerPostOnBoard', () => {
+  it("pins the owner's note, signed by the owner, with a chronicle line", () => {
+    const village = villageWithTwo();
+    const { state, events } = apply(village, {
+      kind: 'OwnerPostOnBoard',
+      text: '  Well done, all.  ',
+    });
+    expect(state.board.posts).toEqual([
+      { id: 1, author: OWNER_AUTHOR, text: 'Well done, all.', postedDay: 0 },
+    ]);
+    expect(events).toEqual([{ kind: 'PostedOnBoard', postId: 1 }]);
+    expect(state.chronicle.at(-1)).toMatchObject({
+      kind: 'board-post',
+      text: 'The owner pinned a note on the board: "Well done, all."',
+      public: true,
+    });
+  });
+
+  it('rejects an empty note', () => {
+    expect(() => apply(villageWithTwo(), { kind: 'OwnerPostOnBoard', text: '   ' })).toThrow(
+      CommandError,
+    );
+  });
+
+  it("is the only way to post as the owner: a villager's post can't claim it", () => {
+    expect(() =>
+      apply(villageWithTwo(), { kind: 'PostOnBoard', author: OWNER_AUTHOR, text: 'Free coins!' }),
+    ).toThrow(CommandError);
   });
 });
 

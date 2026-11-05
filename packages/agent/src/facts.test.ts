@@ -156,6 +156,16 @@ describe('the notice board in the facts', () => {
     expect(renderFacts(snapshot)).toContain('On the notice board: hesper: "six"; hesper: "five"');
   });
 
+  it("signs the owner's own notes as the owner's", () => {
+    const state = apply(createVillage(1, {}), {
+      kind: 'OwnerPostOnBoard',
+      text: 'Well done, all.',
+    }).state;
+    expect(renderFacts(facts(state, 'owner', 'chat'))).toContain(
+      'On the notice board: the owner: "Well done, all."',
+    );
+  });
+
   it('leaves the board line out when nothing is pinned up', () => {
     const snapshot = facts(createVillage(1, {}), 'owner', 'chat');
     expect(snapshot.boardPosts).toEqual([]);

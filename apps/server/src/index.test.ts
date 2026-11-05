@@ -767,6 +767,27 @@ describe("the owner's own actions", () => {
     expect(card.memories.map((m) => m.text)).toContain('The owner thanked me.');
     expect(village.state.villagerNeeds.ada?.fun).toBeGreaterThanOrEqual(before);
     expect((await postJson(app, '/api/villagers/nobody/thank')).status).toBe(404);
+    // Once a day.
+    const again = await postJson(app, '/api/villagers/ada/thank');
+    expect(again.status).toBe(409);
+    expect(((await again.json()) as { error: string }).error).toBe(
+      'ada has already been thanked today',
+    );
+  });
+
+  it("pins the owner's note on the board, where the facts and villagers see it", async () => {
+    const { app } = await createLiveTestApp();
+    const response = await postJson(app, '/api/board', { text: '  Harvest supper on Starday!  ' });
+    expect(response.status).toBe(200);
+    const facts = (await (await app.request('/api/village')).json()) as {
+      boardPosts: { author: string; text: string }[];
+    };
+    expect(facts.boardPosts[0]).toMatchObject({
+      author: 'owner',
+      text: 'Harvest supper on Starday!',
+    });
+    expect((await postJson(app, '/api/board', { text: '   ' })).status).toBe(400);
+    expect((await postJson(app, '/api/board', { text: 'x'.repeat(201) })).status).toBe(400);
   });
 
   it('marks a promise kept once, and refuses to decide it twice', async () => {

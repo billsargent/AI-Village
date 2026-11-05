@@ -85,3 +85,23 @@ body {
     0 2px 0 #3b220f,
     0 -2px 0 #3b220f;
 }
+
+/* Stepping through a door: the screen starts dark and clears. */
+@keyframes door-fade {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.door-fade {
+  animation: door-fade 450ms ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .door-fade {
+    display: none;
+  }
+}

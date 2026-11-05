@@ -171,6 +171,13 @@ export function VillagerCardPanel({
             </button>
           </div>
           {thank.isSuccess && <p className="text-sm">{name} looks pleased.</p>}
+          {thank.isError && (
+            <p className="text-sm">
+              {thank.error.message.includes('already')
+                ? `You've already thanked ${name} today.`
+                : `Couldn't thank ${name}: ${thank.error.message}`}
+            </p>
+          )}
         </div>
       </div>
 

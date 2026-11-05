@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { brightnessOf, lightAt, lightWord } from './light.js';
+import { brightnessOf, indoorLightAt, lightAt, lightWord } from './light.js';
 
 describe('lightAt', () => {
   it('is neutral by day, so the map looks as drawn', () => {
@@ -30,6 +30,15 @@ describe('lightAt', () => {
         expect(Math.abs((a[c] ?? 0) - (b[c] ?? 0))).toBeLessThanOrEqual(3);
       }
     }
+  });
+});
+
+describe('indoorLightAt', () => {
+  it('is the same as outside by day, and never as dark as the night outside', () => {
+    expect(indoorLightAt(12, 0)).toEqual([255, 255, 255]);
+    const night = indoorLightAt(1, 0);
+    expect(brightnessOf(night)).toBeGreaterThan(brightnessOf(lightAt(1, 0)));
+    expect(brightnessOf(night)).toBeLessThan(1);
   });
 });
 

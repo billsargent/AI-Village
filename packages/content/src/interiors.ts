@@ -76,13 +76,26 @@ export function kindOfFurniture(sprite: SpriteFrame): FurnitureKind | undefined 
 }
 
 /**
- * A plain floor colour for interior scenes, the indoor equivalent of
- * the outdoor view's canvas background - not a real floor tile (the
- * sheet's own floor/wall art doesn't sit on clean tile boundaries, so
- * there's no honest single tile to crop and repeat), just a backdrop
- * behind the real, picked furniture sprites.
+ * The room itself, cut from the same sheet. Its walls and floors are
+ * drawn as sample rooms rather than on the 16px grid, so these are exact
+ * pixel rectangles read off a grid overlay, each chosen to repeat cleanly.
  */
-export const INTERIOR_FLOOR_COLOR = '#d7c88a';
+/** A 16px-wide slice of back wall: its shadowed top edge, plaster and red skirting. Repeats sideways. */
+export const BACK_WALL: SpriteFrame = { file: INSIDE_TILES, x: 24, y: 7, width: 16, height: 25 };
+/** Light floorboards, a 16px tile that repeats both ways. */
+export const FLOORBOARDS: SpriteFrame = {
+  file: INSIDE_TILES,
+  x: 112,
+  y: 80,
+  width: 16,
+  height: 16,
+};
+/** A window with red curtains, set into the back wall. */
+export const WINDOW: SpriteFrame = { file: INSIDE_TILES, x: 87, y: 59, width: 20, height: 15 };
+/** A small framed landscape, hung on the back wall. */
+export const PICTURE: SpriteFrame = insideTileRect(5, 9, 1, 1);
+/** The pale top of the room's surrounding walls, as on the sheet's sample rooms. */
+export const WALL_TOP_COLOR = '#ede3bf';
 
 export interface InteriorItem {
   sprite: SpriteFrame;
