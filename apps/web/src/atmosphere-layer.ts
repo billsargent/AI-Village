@@ -42,7 +42,7 @@ function toHex([r, g, b]: Rgb): number {
 }
 
 /** A soft round light, bright in the middle and fading to nothing, drawn once and reused. */
-function makeGlowTexture(): Texture {
+export function makeGlowTexture(): Texture {
   const size = 64;
   const canvas = document.createElement('canvas');
   canvas.width = size;

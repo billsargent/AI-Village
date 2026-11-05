@@ -19,3 +19,5 @@ export * from './terrain.js';
 export * from './whereabouts.js';
 export * from './paths.js';
 export * from './cat.js';
+export * from './chickens.js';
+export * from './small-talk.js';

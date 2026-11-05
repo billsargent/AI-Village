@@ -2,6 +2,8 @@ import type { BuildingId, FurnitureKind, MapId } from '@ai-village/content';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { buildingSummary, namesList } from './building-card.js';
 import { ChatPanel } from './ChatPanel.js';
+import { Gazette } from './Gazette.js';
+import { WorkAlong } from './WorkAlong.js';
 import { CommandPalette, type PaletteItem } from './CommandPalette.js';
 import { applyTextSize, loadTextSize } from './text-size.js';
 import { VillagerCardPanel } from './VillagerCardPanel.js';
@@ -130,6 +132,7 @@ function Clock({ data }: { data: VillageFacts }) {
         {data.treasuryCoins}
       </div>
       <SpeedControls />
+      <WorkAlong />
     </div>
   );
 }
@@ -177,6 +180,7 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showJournal, setShowJournal] = useState(true);
   const [showInbox, setShowInbox] = useState(false);
+  const [showGazette, setShowGazette] = useState(false);
   const [chatWith, setChatWith] = useState<string | null>(null);
   const [cardFor, setCardFor] = useState<string | null>(null);
   const [buildingCard, setBuildingCard] = useState<{ buildingId: string; slot: number } | null>(
@@ -197,6 +201,7 @@ export function App() {
   const overlayOpen =
     showSettings ||
     showInbox ||
+    showGazette ||
     showPalette ||
     chatWith !== null ||
     cardFor !== null ||
@@ -257,6 +262,8 @@ export function App() {
         setChatWith((current) => current ?? firstVillagerId);
       } else if (event.key === 'i') {
         setShowInbox(true);
+      } else if (event.key === 'n') {
+        setShowGazette(true);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -349,6 +356,22 @@ export function App() {
       run: () => {
         setShowInbox(true);
       },
+    },
+    {
+      id: 'gazette',
+      label: 'The Morning Gazette',
+      hint: 'The village paper',
+      keywords: 'newspaper news paper puzzle',
+      run: () => {
+        setShowGazette(true);
+      },
+    },
+    {
+      id: 'work-along',
+      label: 'Work along',
+      hint: 'Start a focus session from the clock',
+      keywords: 'focus timer pomodoro',
+      run: () => undefined,
     },
     {
       id: 'settings',
@@ -481,6 +504,15 @@ export function App() {
                 {pendingApprovals}
               </span>
             )}
+          </button>
+          <button
+            type="button"
+            className="wood-button"
+            onClick={() => {
+              setShowGazette(true);
+            }}
+          >
+            Gazette
           </button>
           <button
             type="button"
@@ -783,6 +815,17 @@ export function App() {
           }}
         >
           <InboxPanel />
+        </Dialog>
+      )}
+
+      {showGazette && (
+        <Dialog
+          title="The Morning Gazette"
+          onClose={() => {
+            setShowGazette(false);
+          }}
+        >
+          <Gazette data={data} pendingApprovals={pendingApprovals} />
         </Dialog>
       )}
 

@@ -390,3 +390,19 @@
   browser (#194).
 - The village cat: an orange cat that naps somewhere new each hour and
   sleeps on the inn's or town hall's doorstep at night (#195).
+- The Morning Gazette (the Gazette button, N, or the palette): headlines
+  from the chronicle, the weather and almanac with a countdown to the next
+  festival, what's in the stores, the notice board, what's waiting on you,
+  and a word search of the villagers' names. This edition is put together
+  by rules; the spec's model-written columns are still to come (#197).
+- Work along: a 25, 50 or 90-minute focus timer under the clock. When it
+  ends, confetti falls, everyone's fun lifts a little and the chronicle
+  notes it. Stopping early records nothing (#198).
+- Festival decorations: bunting round the green for the Sowing Fair and
+  the Harvest Festival, a bonfire and fireflies on Midsummer Night, and
+  lanterns drifting down the river on Lantern Night (#199).
+- Villagers greet each other as they pass, in speech bubbles that fit the
+  hour, the weather or the festival (#200).
+- At night a Zzz rises from homes with sleepers, and hovering over one
+  tells you what each sleeper dreams of (#201).
+- Three white hens peck about the first field once there are fields (#202).

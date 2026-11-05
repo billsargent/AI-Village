@@ -86,6 +86,8 @@ const updateSettingsSchema = z
 const BUDGET_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const setSpeedSchema = z.object({ speed: clockSpeedSchema });
 const decideSchema = z.object({ decision: z.enum(['approved', 'declined']) });
+/** A finished work-along session. */
+const focusSessionSchema = z.object({ minutes: z.number().int() });
 /** A note the owner pins on the board. */
 const boardPostSchema = z.object({ text: z.string().trim().min(1).max(200) });
 
@@ -222,6 +224,21 @@ export async function createApp(options: CreateAppOptions = {}) {
       return c.json({ error: error instanceof Error ? error.message : String(error) }, 409);
     }
     return c.json(villagerCard(village.state, id));
+  });
+
+  /** Spec section 15's work-along: the owner finished a focus session, and the village cheers. */
+  app.post('/api/work-along', async (c) => {
+    const body: unknown = await c.req.json().catch(() => null);
+    const parsed = focusSessionSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: 'minutes must be 25, 50 or 90' }, 400);
+    }
+    try {
+      await village.act({ kind: 'FinishFocusSession', minutes: parsed.data.minutes });
+    } catch {
+      return c.json({ error: 'minutes must be 25, 50 or 90' }, 400);
+    }
+    return c.json({ ok: true });
   });
 
   /** The owner pins a note on the notice board: `{ text }`, up to 200 characters. */

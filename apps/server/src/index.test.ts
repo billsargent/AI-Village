@@ -775,6 +775,18 @@ describe("the owner's own actions", () => {
     );
   });
 
+  it('records a finished work-along session in the chronicle', async () => {
+    const { app } = await createLiveTestApp();
+    expect((await postJson(app, '/api/work-along', { minutes: 25 })).status).toBe(200);
+    const facts = (await (await app.request('/api/village')).json()) as {
+      recentChronicle: { text: string }[];
+    };
+    expect(facts.recentChronicle.map((entry) => entry.text)).toContain(
+      'The owner finished 25 minutes of focused work, and the village cheered.',
+    );
+    expect((await postJson(app, '/api/work-along', { minutes: 7 })).status).toBe(400);
+  });
+
   it("pins the owner's note on the board, where the facts and villagers see it", async () => {
     const { app } = await createLiveTestApp();
     const response = await postJson(app, '/api/board', { text: '  Harvest supper on Starday!  ' });
